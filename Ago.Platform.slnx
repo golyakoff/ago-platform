@@ -4,6 +4,7 @@
     <Project Path="src/Ago.Platform.Kernel/Ago.Platform.Kernel.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Ago.Platform.Architecture.Tests/Ago.Platform.Architecture.Tests.csproj" />
     <Project Path="tests/Ago.Platform.Tests/Ago.Platform.Tests.csproj" />
   </Folder>
 </Solution>
