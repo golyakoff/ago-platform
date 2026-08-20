@@ -1,5 +1,7 @@
 # AGO Platform
 
+[![CI](https://github.com/golyakoff/ago-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/golyakoff/ago-platform/actions/workflows/ci.yml)
+
 The reusable substrate behind AGO products: hosting, realtime transport, messaging, persistence,
 caching, object storage, resilience and observability. It knows nothing about any product, and it
 cannot: products are separate repositories, and this one ships as versioned NuGet packages.
