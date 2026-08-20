@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# A branch with a red job here cannot show green - this workflow's name is what a GitHub branch
+# protection rule requires (docs/backlog/0-04-ci-pipeline.md, conventions/git-workflow.md).
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore Ago.Platform.slnx
+
+      # Runs before build so a formatting-only branch fails fast, before paying for compilation.
+      - name: Format check
+        run: dotnet format Ago.Platform.slnx --verify-no-changes
+
+      - name: Build
+        run: dotnet build Ago.Platform.slnx --no-restore -c Release
+
+      # Ago.Platform.Architecture.Tests is an ordinary test project in this solution, so the
+      # layering rules it encodes run here with no separate job - a deliberate violation fails
+      # this step exactly like a broken unit test would.
+      - name: Test
+        run: >
+          dotnet test Ago.Platform.slnx --no-build -c Release
+          --logger trx --results-directory TestResults
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+
+  # Packs main only - a branch producing a .nupkg nobody will consume is wasted CI time, and
+  # publishing from every push would let two branches race to claim the same version number.
+  pack:
+    needs: build-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # CHANGELOG.md is the single source of truth for the published version - not
+      # Directory.Build.props's <Version>, which packing ignores here. That forces every version
+      # bump through the file a consumer actually reads, instead of two places that can drift.
+      - name: Read version from CHANGELOG.md
+        id: version
+        run: |
+          version=$(grep -m1 '^## \[' CHANGELOG.md | sed -E 's/^## \[([^]]+)\].*/\1/')
+          if [ -z "$version" ]; then
+            echo "Could not find a '## [x.y.z]' heading at the top of CHANGELOG.md" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Pack
+        run: >
+          dotnet pack Ago.Platform.slnx -c Release -o nupkgs
+          -p:Version=${{ steps.version.outputs.version }}
+
+      # No hosted feed yet (adr/0015): this artifact is for a human to download and inspect, not
+      # for ago-chat's CI to consume - that job packs this same source fresh, from scratch.
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs-${{ steps.version.outputs.version }}
+          path: nupkgs/*.nupkg
