@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ago.Platform.Kernel\Ago.Platform.Kernel.csproj" />
+    <ProjectReference Include="..\..\src\Ago.Platform.Hosting\Ago.Platform.Hosting.csproj" />
   </ItemGroup>
 
 </Project>
