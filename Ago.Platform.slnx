@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ago.Platform.Hosting/Ago.Platform.Hosting.csproj" />
+    <Project Path="src/Ago.Platform.Kernel/Ago.Platform.Kernel.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ago.Platform.Tests/Ago.Platform.Tests.csproj" />
+  </Folder>
+</Solution>
