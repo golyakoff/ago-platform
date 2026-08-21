@@ -4,6 +4,23 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.4.0] - 2026-08-22
+
+### Added
+
+- `Ago.Platform.Abstractions`: `NodeDelivery`, `ILocalConnectionDispatcher`, `INodeFanoutPublisher` -
+  the targeted cross-node delivery contract realtime.md's Fan-out path describes (3-02).
+- `Ago.Platform.Realtime`: `NodeTopics`, `NodeFanoutPublisher` (resolves recipients via
+  `IConnectionRegistry`, groups by node, publishes one `NodeDelivery` per node), `NodeDeliveryConsumer`
+  (a node's own consumer of its topic, dispatching each connection via
+  `ILocalConnectionDispatcher`).
+
+### Changed
+
+- `IEventPublisher.PublishAsync`'s doc comment now names two legitimate caller categories (the
+  outbox dispatcher, and ephemeral fan-out derived from an already-outboxed event - `adr/0020`)
+  instead of claiming a single caller that is no longer true. No signature change.
+
 ## [0.3.0] - 2026-08-22
 
 ### Added
