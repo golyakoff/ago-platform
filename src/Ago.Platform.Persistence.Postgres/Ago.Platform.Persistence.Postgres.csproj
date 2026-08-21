@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- adr/0017: the generic outbox/inbox writer targets EF Core directly (TContext : DbContext),
+         not a specific provider - Npgsql only matters for the jsonb column type on Payload. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ago.Platform.Abstractions\Ago.Platform.Abstractions.csproj" />
+    <!-- IClock only - date-and-time.md: SystemClock.cs is the one place DateTimeOffset.UtcNow is
+         read; InboxRecord.ProcessedAt comes from here instead. -->
+    <ProjectReference Include="..\Ago.Platform.Kernel\Ago.Platform.Kernel.csproj" />
+  </ItemGroup>
+
+</Project>
