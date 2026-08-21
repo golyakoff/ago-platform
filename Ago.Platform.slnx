@@ -5,6 +5,7 @@
     <Project Path="src/Ago.Platform.Kernel/Ago.Platform.Kernel.csproj" />
     <Project Path="src/Ago.Platform.Messaging.RabbitMq/Ago.Platform.Messaging.RabbitMq.csproj" />
     <Project Path="src/Ago.Platform.Persistence.Postgres/Ago.Platform.Persistence.Postgres.csproj" />
+    <Project Path="src/Ago.Platform.Realtime/Ago.Platform.Realtime.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Ago.Platform.Architecture.Tests/Ago.Platform.Architecture.Tests.csproj" />
