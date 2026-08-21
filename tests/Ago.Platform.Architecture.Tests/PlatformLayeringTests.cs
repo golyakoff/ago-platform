@@ -34,6 +34,7 @@ public class PlatformLayeringTests
         AssertNoAgoChatDependency(typeof(Ago.Platform.Hosting.IProductModule).Assembly, "Ago.Platform.Hosting");
         AssertNoAgoChatDependency(typeof(Ago.Platform.Abstractions.IEventPublisher).Assembly, "Ago.Platform.Abstractions");
         AssertNoAgoChatDependency(typeof(Ago.Platform.Persistence.Postgres.OutboxMessage).Assembly, "Ago.Platform.Persistence.Postgres");
+        AssertNoAgoChatDependency(typeof(Ago.Platform.Messaging.RabbitMq.RabbitMqEventPublisher).Assembly, "Ago.Platform.Messaging.RabbitMq");
     }
 
     private static void AssertNoAgoChatDependency(Assembly assembly, string assemblyName)
