@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
 
 # A branch with a red job here cannot show green - this workflow's name is what a GitHub branch
