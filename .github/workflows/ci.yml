@@ -48,6 +48,10 @@ jobs:
     needs: build-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    # write is needed to publish to this repository's own GitHub Packages feed below - the default
+    # GITHUB_TOKEN can do that for its own repository with no extra secret (adr/0018).
+    permissions:
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -73,10 +77,20 @@ jobs:
           dotnet pack Ago.Platform.slnx -c Release -o nupkgs
           -p:Version=${{ steps.version.outputs.version }}
 
-      # No hosted feed yet (adr/0015): this artifact is for a human to download and inspect, not
-      # for ago-chat's CI to consume - that job packs this same source fresh, from scratch.
+      # Kept alongside the registry push below: lets a reviewer without package-read access grab
+      # the .nupkg straight from the Actions run, no credential needed.
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: nupkgs-${{ steps.version.outputs.version }}
           path: nupkgs/*.nupkg
+
+      # adr/0018: the durable feed ago-chat's CI restores from. --skip-duplicate makes a re-run of
+      # this job on the same commit (e.g. a retry) a no-op instead of a hard failure - GitHub
+      # Packages rejects re-pushing a version that already exists.
+      - name: Push packages to GitHub Packages
+        run: >
+          dotnet nuget push "nupkgs/*.nupkg"
+          --source https://nuget.pkg.github.com/golyakoff/index.json
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate
