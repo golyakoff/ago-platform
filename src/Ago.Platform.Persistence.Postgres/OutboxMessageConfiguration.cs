@@ -13,8 +13,10 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(o => o.Id).HasColumnName("id");
         builder.Property(o => o.OccurredAt).HasColumnName("occurred_at");
         builder.Property(o => o.Type).HasColumnName("type");
+        builder.Property(o => o.Version).HasColumnName("version");
         builder.Property(o => o.Payload).HasColumnName("payload").HasColumnType("jsonb");
         builder.Property(o => o.PartitionKey).HasColumnName("partition_key");
+        builder.Property(o => o.CorrelationId).HasColumnName("correlation_id");
         builder.Property(o => o.PublishedAt).HasColumnName("published_at");
         builder.Property(o => o.Attempts).HasColumnName("attempts");
 
