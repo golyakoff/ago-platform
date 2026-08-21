@@ -19,6 +19,14 @@ public sealed class LocalConnectionTracker
 
     public void Remove(ConnectionId connectionId) => _connections.TryRemove(connectionId, out _);
 
+    /// <summary>3-02: lets a host's <c>ILocalConnectionDispatcher</c> learn which principal (and so
+    /// which transport-specific channel - a hub type, in <c>Ago.Chat.Api</c>'s case) a connection id
+    /// belongs to, without the platform needing to know what a "hub type" is. <see langword="null"/>
+    /// for a connection this process no longer knows about - never an error; the caller treats it the
+    /// same as any other stale-entry no-op (realtime.md).</summary>
+    public PrincipalKey? TryGet(ConnectionId connectionId) =>
+        _connections.TryGetValue(connectionId, out var principal) ? principal : null;
+
     /// <summary>A point-in-time copy - safe to enumerate while connections are concurrently being
     /// added or removed (concurrency.md: shared mutable state is <c>ConcurrentDictionary</c>, and
     /// nothing here holds a lock across the enumeration).</summary>

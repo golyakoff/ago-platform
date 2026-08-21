@@ -37,6 +37,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(typeof(NodeId), _ => (object)ResolveNodeId());
         services.AddSingleton<LocalConnectionTracker>();
         services.AddSingleton<IConnectionRegistry, RedisConnectionRegistry>();
+        // Depends on IEventPublisher/IClock being registered by the host's own composition root
+        // (AddRabbitMqMessaging, AddPlatformKernel) - not this method's concern to register them.
+        services.AddSingleton<INodeFanoutPublisher, NodeFanoutPublisher>();
 
         return services;
     }
