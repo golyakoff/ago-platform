@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\Ago.Platform.Hosting\Ago.Platform.Hosting.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Abstractions\Ago.Platform.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Persistence.Postgres\Ago.Platform.Persistence.Postgres.csproj" />
+    <ProjectReference Include="..\..\src\Ago.Platform.Messaging.RabbitMq\Ago.Platform.Messaging.RabbitMq.csproj" />
   </ItemGroup>
 
 </Project>
