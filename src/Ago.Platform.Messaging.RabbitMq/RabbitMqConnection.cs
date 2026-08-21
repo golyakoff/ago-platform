@@ -47,6 +47,13 @@ public sealed class RabbitMqConnection(IOptions<RabbitMqOptions> options) : IAsy
                 VirtualHost = settings.VirtualHost,
                 AutomaticRecoveryEnabled = true,
                 TopologyRecoveryEnabled = true,
+                // The client default (60s) means a silently-dead connection (broker paused or
+                // network-partitioned, never sends TCP FIN/RST) can take minutes to be noticed before
+                // automatic recovery even starts - found while proving 2-04's dispatcher actually
+                // recovers after the broker comes back. Ten seconds is still generous for a real
+                // network, and turns "recovery eventually happens" into "recovery happens within the
+                // time this system's own latency targets care about" (nfr.md, Stage 7).
+                RequestedHeartbeat = TimeSpan.FromSeconds(10),
             };
 
             _connection = await factory.CreateConnectionAsync(cancellationToken);
