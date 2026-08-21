@@ -45,6 +45,22 @@ public sealed class RabbitMqEventPublisher(RabbitMqConnection connection) : IEve
                 body: Encoding.UTF8.GetBytes(envelope.Payload),
                 cancellationToken: cancellationToken);
         }
+        catch
+        {
+            // A publish that faulted or was cancelled (timeout waiting on a confirm) leaves this
+            // channel's state ambiguous - IChannel.IsOpen was observed staying true for a full 60s+
+            // after a broker outage genuinely ended, so it cannot be trusted to decide whether the
+            // next attempt should reuse this channel. Discarding it forces GetChannelAsync to
+            // negotiate a fresh one, which is cheap and known-good, rather than keep retrying on a
+            // channel that already failed once for an unknown reason.
+            if (_channel is not null)
+            {
+                await _channel.DisposeAsync();
+                _channel = null;
+            }
+
+            throw;
+        }
         finally
         {
             _lock.Release();
