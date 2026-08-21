@@ -11,13 +11,17 @@ public sealed class OutboxMessage
     {
     }
 
-    public OutboxMessage(Guid id, DateTimeOffset occurredAt, string type, string payload, string partitionKey)
+    public OutboxMessage(
+        Guid id, DateTimeOffset occurredAt, string type, int version, string payload, string partitionKey,
+        Guid correlationId)
     {
         Id = id;
         OccurredAt = occurredAt;
         Type = type;
+        Version = version;
         Payload = payload;
         PartitionKey = partitionKey;
+        CorrelationId = correlationId;
     }
 
     public Guid Id { get; private set; }
@@ -26,9 +30,13 @@ public sealed class OutboxMessage
 
     public string Type { get; private set; } = null!;
 
+    public int Version { get; private set; }
+
     public string Payload { get; private set; } = null!;
 
     public string PartitionKey { get; private set; } = null!;
+
+    public Guid CorrelationId { get; private set; }
 
     public DateTimeOffset? PublishedAt { get; private set; }
 

@@ -17,8 +17,10 @@ public sealed class EfOutboxWriter<TContext>(TContext dbContext) : IOutboxWriter
             envelope.MessageId,
             envelope.OccurredAt,
             envelope.Type,
+            envelope.Version,
             envelope.Payload,
-            envelope.PartitionKey);
+            envelope.PartitionKey,
+            envelope.CorrelationId);
 
         dbContext.Set<OutboxMessage>().Add(message);
     }

@@ -27,7 +27,9 @@ public sealed class EfOutboxWriterTests(PostgresFixture fixture)
         Assert.True(await verify.Widgets.AnyAsync(w => w.Id == widgetId, CancellationToken.None));
         var persisted = await verify.Set<OutboxMessage>().SingleAsync(o => o.Id == envelope.MessageId, CancellationToken.None);
         Assert.Equal(envelope.Type, persisted.Type);
+        Assert.Equal(envelope.Version, persisted.Version);
         Assert.Equal(envelope.PartitionKey, persisted.PartitionKey);
+        Assert.Equal(envelope.CorrelationId, persisted.CorrelationId);
         Assert.Null(persisted.PublishedAt);
     }
 
