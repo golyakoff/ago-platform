@@ -4,6 +4,16 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.3.0] - 2026-08-22
+
+### Added
+
+- `Ago.Platform.Realtime` (new project): `IConnectionRegistry` (declared in
+  `Ago.Platform.Abstractions`, alongside `ConnectionId`, `NodeId`, `PrincipalKey`,
+  `RegisteredConnection`) - the Redis-backed "who is connected where" registry `realtime.md`
+  describes, plus `ConnectionHeartbeat` and `LocalConnectionTracker` for keeping registered
+  connections' TTLs alive. Depends on `StackExchange.Redis`.
+
 ## [0.2.2] - 2026-08-21
 
 ### Fixed
