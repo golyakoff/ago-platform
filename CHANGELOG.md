@@ -4,6 +4,19 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.10.0] - 2026-08-22
+
+### Added
+
+- `Ago.Platform.Abstractions.IFileStorage` - presigned direct-to-storage uploads/downloads
+  (`adr/0008`), plus `ObjectKey`, `UploadConstraints`, `PresignedUpload`, `ObjectMetadata` and
+  `FileStorageUnavailableException`. Implemented in the new `Ago.Platform.Storage.S3` (AWS SDK,
+  pointed at MinIO locally via `S3StorageOptions.ServiceUrl`) for `ago-chat`'s `5-02` attachment work.
+  Every call runs through retry + per-attempt timeout + circuit breaker (`resilience.md`'s S3/MinIO
+  row); a `404` on `GetMetadataAsync` is the expected "does not exist" outcome, excluded from both,
+  not a failure. `IFileStorage` corrected `file-storage.md`'s own earlier "Application/Abstractions"
+  placement in the same change.
+
 ## [0.9.0] - 2026-08-22
 
 ### Fixed
