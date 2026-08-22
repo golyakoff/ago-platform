@@ -4,6 +4,27 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.9.0] - 2026-08-22
+
+### Fixed
+
+- `Ago.Platform.Abstractions.ICache`/`Ago.Platform.Caching.Redis.RedisCache`: `GetAsync<T>`,
+  `SetAsync<T>` and `GetOrCreateAsync<T>` now constrain `where T : class`. Found live while building
+  `ago-chat`'s `5-01`: for an unconstrained generic parameter, C#'s `T?` return annotation has no
+  runtime effect when `T` is instantiated with a value type - `default(T?)` for `T = bool` is
+  `false`, not a distinguishable null - so `GetOrCreateAsync`'s own `is { }`/`is null` checks could
+  not tell a cold key apart from a genuinely-cached `false`/`0`, and silently never called the
+  factory at all for a legitimately falsy/zero result. Every existing caller happened to avoid this
+  by only ever caching reference-type DTOs (`GetSiteConfigByPublicKeyHandler`'s `SiteLookupResult`);
+  the constraint turns "silently wrong for a value type" into a compile error instead of leaving the
+  port able to misbehave the same way again.
+
+### Breaking
+
+- Any caller passing a value type directly to `ICache.GetAsync<T>`/`SetAsync<T>`/
+  `GetOrCreateAsync<T>` no longer compiles - wrap it in a small reference-type record instead
+  (the pattern every real caller already used).
+
 ## [0.8.0] - 2026-08-22
 
 ### Added

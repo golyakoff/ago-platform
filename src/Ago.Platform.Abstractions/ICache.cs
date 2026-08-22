@@ -9,12 +9,24 @@
 /// Every method degrades to a cache miss on a Redis failure - never throws - per `adr/0009` and
 /// `resilience.md`'s Redis row: losing Redis makes reads slower (a `GetOrCreateAsync` falls through to
 /// its factory every time), never wrong.
+///
+/// `where T : class` on every method - found live, not designed in from the start: for an
+/// *unconstrained* generic parameter, C#'s `T?` return annotation has no runtime effect when `T` is
+/// instantiated with a value type (confirmed empirically - `default(T?)` for `T = bool` is `false`,
+/// not a distinguishable null), so a cache miss and a genuinely-cached `false`/`0` become
+/// indistinguishable to every caller, including this port's own `GetOrCreateAsync` (its `is { }`
+/// checks silently treat a cold key as a cached `false` and never call the factory at all). Every
+/// caller up to this point happened to avoid the bug by only ever caching reference-type DTOs
+/// (`GetSiteConfigByPublicKeyHandler`'s `SiteLookupResult`); the constraint turns "silently wrong for
+/// a value type" into a compile error instead, which is the honest fix - the alternative (wrapping
+/// every cached value in an internal presence-envelope) would remove the constraint but adds
+/// complexity no real caller has needed yet.
 /// </summary>
 public interface ICache
 {
-    Task<T?> GetAsync<T>(CacheKey key, CancellationToken cancellationToken);
+    Task<T?> GetAsync<T>(CacheKey key, CancellationToken cancellationToken) where T : class;
 
-    Task SetAsync<T>(CacheKey key, T value, CacheEntryOptions options, CancellationToken cancellationToken);
+    Task SetAsync<T>(CacheKey key, T value, CacheEntryOptions options, CancellationToken cancellationToken) where T : class;
 
     /// <summary>
     /// The method most call sites should use - the only one with stampede protection (in-process
@@ -30,7 +42,8 @@ public interface ICache
     /// of a second cache-entry-options parameter this port does not have.
     /// </summary>
     Task<T> GetOrCreateAsync<T>(
-        CacheKey key, Func<CancellationToken, Task<T>> factory, CacheEntryOptions options, CancellationToken cancellationToken);
+        CacheKey key, Func<CancellationToken, Task<T>> factory, CacheEntryOptions options, CancellationToken cancellationToken)
+        where T : class;
 
     Task RemoveAsync(CacheKey key, CancellationToken cancellationToken);
 }
