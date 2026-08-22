@@ -102,6 +102,38 @@ public sealed class RedisCacheTests(RedisFixture fixture)
         Assert.Null(await cache.GetAsync<string>(key, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task GetOrCreateAsync_WhenTheCachedValueLooksLikeADefault_StillCallsTheFactoryOnlyOnce_NotEveryTime()
+    {
+        // A real bug, found live while building 5-01 (ago-chat): for an *unconstrained* generic T,
+        // C#'s T? return annotation has no runtime effect when T is a value type - default(T?) for
+        // T = bool is `false`, not a distinguishable null - so a factory whose real, legitimate
+        // result happens to look like a "falsy" value could be mistaken for a cache miss and get
+        // re-run on every call, defeating GetOrCreateAsync's whole contract. ICache now constrains
+        // T : class specifically so this can never compile for a raw value type again; this test
+        // proves the *reference-type* case - a DTO wrapping a value that is itself the "empty"/
+        // default-looking one - still round-trips correctly and the factory still runs exactly once,
+        // the actual guarantee this method promises.
+        var cache = CreateCache();
+        var key = new CacheKey($"test:{Guid.NewGuid():N}");
+        var calls = 0;
+
+        Task<FalsyResult> Factory(CancellationToken ct)
+        {
+            Interlocked.Increment(ref calls);
+            return Task.FromResult(new FalsyResult(false));
+        }
+
+        var first = await cache.GetOrCreateAsync(key, Factory, new CacheEntryOptions(TimeSpan.FromMinutes(1)), CancellationToken.None);
+        var second = await cache.GetOrCreateAsync(key, Factory, new CacheEntryOptions(TimeSpan.FromMinutes(1)), CancellationToken.None);
+
+        Assert.False(first.Value);
+        Assert.False(second.Value);
+        Assert.Equal(1, calls);
+    }
+
+    private sealed record FalsyResult(bool Value);
+
     private RedisCache CreateCache() => new(fixture.Multiplexer, TestResiliencePipeline, NullLogger<RedisCache>.Instance);
 
     private static readonly ResiliencePipeline TestResiliencePipeline = new ResiliencePipelineBuilder()
