@@ -24,7 +24,7 @@ public sealed class RedisCache(IConnectionMultiplexer multiplexer, ResiliencePip
 
     private IDatabase Database => multiplexer.GetDatabase();
 
-    public async Task<T?> GetAsync<T>(CacheKey key, CancellationToken cancellationToken)
+    public async Task<T?> GetAsync<T>(CacheKey key, CancellationToken cancellationToken) where T : class
     {
         try
         {
@@ -45,7 +45,7 @@ public sealed class RedisCache(IConnectionMultiplexer multiplexer, ResiliencePip
         }
     }
 
-    public async Task SetAsync<T>(CacheKey key, T value, CacheEntryOptions options, CancellationToken cancellationToken)
+    public async Task SetAsync<T>(CacheKey key, T value, CacheEntryOptions options, CancellationToken cancellationToken) where T : class
     {
         try
         {
@@ -61,6 +61,7 @@ public sealed class RedisCache(IConnectionMultiplexer multiplexer, ResiliencePip
 
     public async Task<T> GetOrCreateAsync<T>(
         CacheKey key, Func<CancellationToken, Task<T>> factory, CacheEntryOptions options, CancellationToken cancellationToken)
+        where T : class
     {
         if (await GetAsync<T>(key, cancellationToken) is { } hit)
         {
