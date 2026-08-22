@@ -29,6 +29,14 @@ public static class ServiceCollectionExtensions
             .AddOptions<ConnectionHeartbeatOptions>()
             .Bind(configuration.GetSection(ConnectionHeartbeatOptions.SectionName))
             .ValidateOnStart();
+        // 3-06: registered here (not left to the host) for the same reason DrainState needs no
+        // per-host wiring - the host still decides whether to run ConnectionDrainCoordinator itself
+        // (only Ago.Chat.Api does), but the options/state it needs exist regardless.
+        services
+            .AddOptions<DrainOptions>()
+            .Bind(configuration.GetSection(DrainOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<DrainState>();
 
         // Every generic AddSingleton/TryAddSingleton overload requires TService : class - NodeId
         // is a struct (naming-and-structure.md/existing convention: strongly-typed ids are

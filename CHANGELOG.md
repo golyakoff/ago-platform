@@ -4,6 +4,17 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.7.0] - 2026-08-22
+
+### Added
+
+- `Ago.Platform.Realtime`: `DrainState`, `DrainOptions`, `ConnectionDrainCoordinator` -
+  `concurrency.md`'s graceful-shutdown sequence, the connection-holding half (3-06). Registers
+  against `IHostApplicationLifetime.ApplicationStopping` so `DrainState` flips synchronously the
+  instant shutdown begins; the real work (push a jittered `Reconnect` to every locally-tracked
+  connection via `ILocalConnectionDispatcher`, remove the node's registry entries, wait for
+  connections to actually drop or a bounded timeout) runs from an overridden `StopAsync`.
+
 ## [0.6.0] - 2026-08-22
 
 ### Added
