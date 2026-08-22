@@ -4,6 +4,17 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.6.0] - 2026-08-22
+
+### Added
+
+- `Ago.Platform.Abstractions`: `IRateLimiter`, `RateLimitKey`, `RateLimitRule`, `RateLimitDecision` -
+  `caching.md`'s token-bucket rate-limiting port (3-05).
+- `Ago.Platform.Caching.Redis`: `RedisRateLimiter` - a Lua script doing the atomic
+  check-and-decrement in one round trip (real Redis `TIME`, not the caller's clock, so two nodes
+  racing the same bucket agree on elapsed time), sharing `RedisCache`'s `IConnectionMultiplexer` and
+  `ResiliencePipeline`. Fails open (`Allowed: true`) on any Redis failure, per `adr/0009`.
+
 ## [0.5.0] - 2026-08-22
 
 ### Added
