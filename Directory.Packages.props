@@ -45,11 +45,21 @@
   </ItemGroup>
 
   <ItemGroup Label="Realtime">
-    <!-- Redis connection is shared with Caching.Redis once that ships (3-04) - both register
-         IConnectionMultiplexer via TryAddSingleton against the same Redis:ConnectionString key, so
-         whichever project's DI wiring runs first wins and the other reuses it. -->
+    <!-- Redis connection is shared with Caching.Redis (3-04) - both register IConnectionMultiplexer
+         via TryAddSingleton against the same Redis:ConnectionString key, so whichever project's DI
+         wiring runs first wins and the other reuses it. -->
     <PackageVersion Include="StackExchange.Redis" Version="3.1.31" />
     <PackageVersion Include="Testcontainers.Redis" Version="4.14.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Caching">
+    <!-- The lean v8 resilience package (ResiliencePipeline), not the full classic-API `Polly`
+         package - one circuit breaker + timeout policy in one adapter class does not need the v7
+         Policy<T>/PolicyWrap surface. Replaces a hand-rolled circuit-breaker state machine
+         (closed/open/half-open, failure counting, timers) - well-trodden ground worth not
+         re-implementing for exactly one caller (3-04's open-question resolution: this stays inline
+         here rather than becoming a new Ago.Platform.Resilience project). -->
+    <PackageVersion Include="Polly.Core" Version="8.5.2" />
   </ItemGroup>
 
 </Project>
