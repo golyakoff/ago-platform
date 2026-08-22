@@ -4,6 +4,18 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.5.0] - 2026-08-22
+
+### Added
+
+- `Ago.Platform.Abstractions`: `ICache`, `CacheKey`, `CacheEntryOptions` - `caching.md`'s cache-aside
+  port (3-04).
+- `Ago.Platform.Caching.Redis` (new project): `RedisCache` (the port implemented against Redis - real
+  stampede protection via in-process single-flight plus a short cross-node `RedisLock`, TTL jitter,
+  a shared Polly circuit breaker + timeout degrading every failure to a cache miss rather than an
+  exception), `CacheInvalidationPublisher`/`CacheInvalidationConsumer` (the generic
+  `SubscriptionMode.Broadcast` invalidation broadcast `messaging.md`'s Topics table names).
+
 ## [0.4.0] - 2026-08-22
 
 ### Added
