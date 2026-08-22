@@ -32,6 +32,9 @@ public static class ServiceCollectionExtensions
         // technology") - reuses the IConnectionMultiplexer/ResiliencePipeline registrations above
         // rather than opening a second connection or building a second resilience pipeline.
         services.AddSingleton<IRateLimiter, RedisRateLimiter>();
+        // 4-03: same technology, same project, same resilience pipeline - reuses the registrations
+        // above rather than opening a second connection.
+        services.AddSingleton<RedisDistributedLock>();
 
         return services;
     }

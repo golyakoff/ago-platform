@@ -4,6 +4,17 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.8.0] - 2026-08-22
+
+### Added
+
+- `Ago.Platform.Caching.Redis`: `RedisDistributedLock` - a public, fail-closed distributed lock
+  (`SET NX` acquire, token-checked Lua-script release), for `ago-chat`'s `4-03` assignment-engine
+  alternative (per-operator mutual exclusion via Redis instead of `SKIP LOCKED`). Deliberately not
+  a reuse of the existing internal `RedisLock` (`3-04`'s cache-stampede helper): that one fails open
+  on an unreachable Redis, correct for a redundant cache load but wrong here, where failing open
+  would mean every caller proceeding as if it held an exclusive lock it never actually got.
+
 ## [0.7.0] - 2026-08-22
 
 ### Added
