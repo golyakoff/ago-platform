@@ -28,6 +28,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(BuildResiliencePipeline());
         services.AddSingleton<ICache, RedisCache>();
         services.AddSingleton<CacheInvalidationPublisher>();
+        // 3-05: same technology, same project (naming-and-structure.md's "one project per external
+        // technology") - reuses the IConnectionMultiplexer/ResiliencePipeline registrations above
+        // rather than opening a second connection or building a second resilience pipeline.
+        services.AddSingleton<IRateLimiter, RedisRateLimiter>();
 
         return services;
     }
