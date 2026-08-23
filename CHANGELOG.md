@@ -4,6 +4,54 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.14.0] - 2026-08-24
+
+### Added
+
+- `Ago.Platform.Hosting.AddPlatformObservability` now also wires the OpenTelemetry SDK's `MeterProvider`
+  (`7-02`): ASP.NET Core and `HttpClient` metrics instrumentation (the same two packages `7-01` already
+  referenced for tracing double as their own metrics source - no new package), an OTLP exporter for
+  the metrics signal pointed at the same `Otel:Exporter:Endpoint`, and a new `"Ago.*"` wildcard `Meter`
+  subscription (`ServiceCollectionExtensions.MeterWildcard`) mirroring `7-01`'s `ActivitySourceWildcard`.
+  Folded into the existing method rather than a new sibling `AddPlatformMetrics` - every host already
+  calls `AddPlatformObservability` exactly once from its own `Program.cs`, and both signals configure
+  the same OTel SDK builder, so a second call would only duplicate resource/options setup and add a
+  step to forget.
+- `Ago.Platform.Resilience.ResiliencePolicyBuilder`'s constructor now takes a required `pipelineName`
+  (a breaking change to this pre-1.0 package - every caller already had this value at hand as its own
+  private `PipelineName` constant, e.g. `Ago.Platform.Caching.Redis`'s `"Redis"`,
+  `Ago.Platform.Storage.S3`'s `"S3"`): `WithCircuitBreaker` now exports a per-pipeline breaker-state
+  gauge (`ago.platform.resilience.circuit_breaker.state`, tagged `pipeline`/`state`, one measurement per
+  state per collection - the standard "state as a 0/1-valued label" shape) via Polly's own
+  `CircuitBreakerStateProvider`, and `WithBulkhead` now exports a bulkhead-rejection counter
+  (`ago.platform.resilience.bulkhead.rejections`, tagged `pipeline`) via Polly's `AddRateLimiter(RateLimiterStrategyOptions)`
+  overload (switched from the `AddConcurrencyLimiter(int, int)` convenience overload, which has no
+  `OnRejected` hook to attach the counter to). Both instruments live in the shared pipeline builder
+  itself, not duplicated per boundary - `nfr.md`'s "breaker state... per named resilience pipeline"
+  covers `6-05`'s future webhook-dispatcher pipeline automatically once it registers.
+- `Ago.Platform.Caching.Redis.CachingMetrics`: a cache-access counter
+  (`ago.platform.caching.redis.cache_access`, tagged `namespace` - parsed off `CacheKey`'s own
+  documented `{namespace}:{id}` convention - and `outcome`, `hit`/`miss`), recorded once inside
+  `RedisCache.GetAsync` (the one method every read path, including `GetOrCreateAsync`'s own
+  double-checked reads, funnels through). A Redis failure is treated as a miss for the caller but is
+  deliberately *not* counted here, to avoid silently depressing the hit ratio during an outage that is
+  already separately observable via the new breaker-state gauge above.
+- `Ago.Platform.Realtime.RealtimeMetrics`: a connections-per-node gauge
+  (`ago.platform.realtime.connections`, tagged `node`), sourced from `RedisConnectionRegistry`'s own
+  local bookkeeping (updated unconditionally in `RegisterAsync`/`UnregisterAsync`/`RemoveNodeAsync`,
+  before the Redis write is attempted) rather than a live Redis query at collection time - an
+  `ObservableGauge` callback runs synchronously and must not block on network I/O, and a registry read
+  failing must never be the reason a metrics scrape fails either (`realtime.md`'s own "advice, not
+  truth" contract, extended from staleness/errors to this gauge).
+- `Ago.Platform.Messaging.RabbitMq`: a per-consumer RED triad
+  (`ago.platform.messaging.rabbitmq.consumer.duration`, `...consumer.count` tagged `topic`/`consumer`/
+  `outcome`) and a dead-letter counter (`...dead_lettered`, tagged `event_type`), both added at
+  `RabbitMqEventConsumer`'s own generic handler-invocation boundary (the same `"{topic} process"` span
+  boundary `7-01` already named) and `RabbitMqMessageContext.DeadLetterAsync`'s own single choke point -
+  every product consumer this platform hosts gets RED and DLQ counting for free, with no change to
+  `Ago.Chat.Worker`'s own consumer classes, the same "instrument the generic adapter once" placement
+  `7-01`'s tracing already established for this exact boundary.
+
 ## [0.13.0] - 2026-08-24
 
 ### Added

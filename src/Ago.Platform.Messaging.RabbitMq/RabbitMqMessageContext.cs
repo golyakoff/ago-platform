@@ -47,5 +47,12 @@ internal sealed class RabbitMqMessageContext(
             exchange: "", routingKey: deadLetterQueueName, mandatory: false,
             basicProperties: new BasicProperties(delivery.BasicProperties), body: delivery.Body, cancellationToken: cancellationToken);
         await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, cancellationToken);
+
+        // `7-02`: messaging.md's "DLQ count" - the single choke point every dead-letter decision
+        // passes through, whether reached from NackAsync giving up above or called directly by a
+        // handler. delivery.BasicProperties.Type is the same event-type string EventEnvelope.Type was
+        // deserialized from (RabbitMqEventConsumer.Deserialize), read straight off the wire rather
+        // than re-parsing the envelope here.
+        RabbitMqMetrics.RecordDeadLettered(delivery.BasicProperties.Type);
     }
 }

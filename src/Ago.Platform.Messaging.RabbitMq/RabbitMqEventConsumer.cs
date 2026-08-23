@@ -68,6 +68,11 @@ public sealed class RabbitMqEventConsumer(RabbitMqConnection connection) : IEven
             var context = new RabbitMqMessageContext(
                 channel, delivery, retryQueueName, retryPolicy.DeadLetterName, retryPolicy.MaxAttempts, attempt);
 
+            // `7-02`: nfr.md's "RED metrics... per consumer" - the same duration/success/error triad
+            // 7-01's own manual hub spans record, at this adapter's own generic handler-invocation
+            // boundary rather than once per product consumer type (RabbitMqMetrics's own remarks).
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
             // `7-01`: RabbitMqTracing's own remarks - extracts the `traceparent` header the
             // publisher injected and starts a real child span in that same trace, named after the
             // topic (OTel's own messaging semantic-convention shape, "{destination} process") so it
@@ -82,9 +87,12 @@ public sealed class RabbitMqEventConsumer(RabbitMqConnection connection) : IEven
             try
             {
                 await handler(envelope, context, cancellationToken);
+                RabbitMqMetrics.RecordHandled(topic, consumerName, stopwatch.Elapsed, success: true);
             }
             catch (Exception)
             {
+                RabbitMqMetrics.RecordHandled(topic, consumerName, stopwatch.Elapsed, success: false);
+
                 // messaging.md: handlers must be safe to run twice regardless of the inbox - a
                 // thrown exception is treated exactly like an explicit NackAsync(requeue: true).
                 await context.NackAsync(requeue: true, cancellationToken);

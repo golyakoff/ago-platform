@@ -3,6 +3,7 @@ using Ago.Platform.Kernel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -23,21 +24,35 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// `7-01`: one call from every host's <c>Program.cs</c> (`Ago.Chat.Api`/`Worker`/`Webhooks`) -
-    /// wires the OTel SDK's tracing provider with ASP.NET Core, HttpClient and Npgsql
-    /// instrumentation, resource attributes that make every host's spans distinguishable in one
-    /// Jaeger UI, and an OTLP exporter pointed at <c>Otel:Exporter:Endpoint</c>. This is deliberately
-    /// the platform/product seam clean-architecture.md describes for `Ago.Platform.Hosting` itself:
-    /// it can wire *generic* OTel SDK instrumentation (nothing here has ever heard of a
-    /// conversation or a visitor) but cannot start the *manual* spans a product's own hub methods,
-    /// outbox dispatcher or consumers need - those live in `Ago.Chat.*` against their own
-    /// `ActivitySource`, picked up here only through <see cref="ActivitySourceWildcard"/>.
+    /// `7-01`/`7-02`: one call from every host's <c>Program.cs</c> (`Ago.Chat.Api`/`Worker`/
+    /// `Webhooks`) - wires both OTel signals this platform ships, tracing (`7-01`) and metrics
+    /// (`7-02`): ASP.NET Core, HttpClient and Npgsql instrumentation (tracing only - Npgsql has no
+    /// metrics instrumentation to add), resource attributes that make every host's telemetry
+    /// distinguishable in one Jaeger/Prometheus pair, and an OTLP exporter per signal pointed at
+    /// <c>Otel:Exporter:Endpoint</c>. This is deliberately the platform/product seam
+    /// clean-architecture.md describes for `Ago.Platform.Hosting` itself: it can wire *generic* OTel
+    /// SDK instrumentation (nothing here has ever heard of a conversation or a visitor) but cannot
+    /// start the *manual* spans/instruments a product's own hub methods, pipeline, outbox dispatcher
+    /// or consumers need - those live in `Ago.Chat.*` (or a platform adapter like
+    /// `Ago.Platform.Messaging.RabbitMq`/`Ago.Platform.Resilience`/`Ago.Platform.Caching.Redis`/
+    /// `Ago.Platform.Realtime`) against their own `ActivitySource`/`Meter`, picked up here only
+    /// through <see cref="ActivitySourceWildcard"/>/<see cref="MeterWildcard"/>.
+    ///
+    /// `7-02`'s own judgment call: metrics were folded into this existing method rather than added as
+    /// a sibling `AddPlatformMetrics` - both signals configure the same OTel SDK builder
+    /// (`ConfigureResource` -> `WithTracing`/`WithMetrics`), so a second call would either duplicate
+    /// the resource/options setup above or split it awkwardly across two methods, and every host
+    /// already calls this one method exactly once from its own `Program.cs` (`7-01`'s own invariant) -
+    /// two calls to remember instead of one is a foot-gun (wire tracing, forget metrics) with no
+    /// offsetting benefit, since nothing here needs the two signals configured independently.
     ///
     /// Npgsql needs no instrumentation *package* at all: it has emitted its own Activities on an
     /// ActivitySource named "Npgsql" since Npgsql 6.0, gated behind whether anything is listening -
     /// <c>.AddSource("Npgsql")</c> is the whole integration, which is also why this method takes no
     /// dependency on Npgsql itself (naming-and-structure.md: this project stays a thin, generic
-    /// bootstrap library, never referencing a specific database driver).
+    /// bootstrap library, never referencing a specific database driver). Npgsql does not publish a
+    /// matching metrics source, so <see cref="MeterWildcard"/>'s subscription below has no Npgsql
+    /// equivalent to add - a metrics gap this item does not invent a workaround for.
     /// </summary>
     public static IServiceCollection AddPlatformObservability(
         this IServiceCollection services, IConfiguration configuration, string serviceName)
@@ -48,9 +63,9 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        // The OTel SDK's builder API (ConfigureResource/WithTracing below) configures the tracing
-        // pipeline once, synchronously, right here - not lazily from a resolved IOptions<T> the way
-        // ordinary request-time configuration would. Binding a second, throwaway instance and
+        // The OTel SDK's builder API (ConfigureResource/WithTracing/WithMetrics below) configures
+        // both pipelines once, synchronously, right here - not lazily from a resolved IOptions<T> the
+        // way ordinary request-time configuration would. Binding a second, throwaway instance and
         // validating it eagerly is what turns a bad Otel:* value into a startup failure immediately
         // (before anything is exported to a wrong or missing endpoint) rather than only once
         // ValidateOnStart's own deferred host-startup check runs - the AddOptions<T> registration
@@ -76,6 +91,22 @@ public static class ServiceCollectionExtensions
                 // "Ago.Chat" specifically is the actual platform/product boundary point: this project
                 // has no access to that name (it is a different repository) and must not need one.
                 .AddSource(ActivitySourceWildcard)
+                .AddOtlpExporter(otlp => otlp.Endpoint = options.Exporter.Endpoint!))
+            .WithMetrics(metrics => metrics
+                // Both packages already referenced for tracing above double as the metrics
+                // instrumentation for the same two signals (RED numbers per endpoint/outbound HTTP
+                // call) - one package, one AddXInstrumentation() call per signal builder, nothing new
+                // to reference (naming-and-structure.md's own "no dependency without saying what it
+                // replaces" - this replaces nothing, it is the same package's second extension method).
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                // The metrics mirror of ActivitySourceWildcard above - every Ago.* manual Meter
+                // (Ago.Chat's hub/pipeline/outbox/assignment instruments, Ago.Platform.Resilience's
+                // breaker/bulkhead instruments, Ago.Platform.Caching.Redis's hit-ratio counter,
+                // Ago.Platform.Realtime's connections gauge, Ago.Platform.Messaging.RabbitMq's
+                // consumer RED/DLQ counters) in one wildcard subscription, the OTel .NET SDK's own
+                // supported wildcard match for AddMeter, mirroring AddSource's.
+                .AddMeter(MeterWildcard)
                 .AddOtlpExporter(otlp => otlp.Endpoint = options.Exporter.Endpoint!));
 
         return services;
@@ -85,4 +116,10 @@ public static class ServiceCollectionExtensions
     /// <c>ActivitySource</c> name is expected to start with "Ago." so this one wildcard subscription
     /// covers all of them without this project ever naming one.</summary>
     public const string ActivitySourceWildcard = "Ago.*";
+
+    /// <summary>`7-02`: the metrics counterpart to <see cref="ActivitySourceWildcard"/> - every
+    /// manually-instrumented <c>Meter</c> this platform or a product hosts is expected to start with
+    /// "Ago." so this one wildcard subscription covers all of them without this project ever naming
+    /// one.</summary>
+    public const string MeterWildcard = "Ago.*";
 }

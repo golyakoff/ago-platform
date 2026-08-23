@@ -17,6 +17,10 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="OpenTelemetry" />
+    <!-- `7-02`: ResiliencePolicyBuilderTests' breaker-state/bulkhead-rejection tests resolve the OTel
+         SDK's own in-memory metric reader, the same bar PlatformObservabilityTests already holds
+         tracing to. -->
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
   </ItemGroup>
 
   <ItemGroup>

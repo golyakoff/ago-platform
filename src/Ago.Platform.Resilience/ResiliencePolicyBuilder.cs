@@ -1,5 +1,7 @@
-﻿using Polly;
+﻿using System.Threading.RateLimiting;
+using Polly;
 using Polly.CircuitBreaker;
+using Polly.RateLimiting;
 using Polly.Retry;
 
 namespace Ago.Platform.Resilience;
@@ -15,8 +17,15 @@ namespace Ago.Platform.Resilience;
 /// dispatcher) composes existing building blocks instead of writing a fourth one. Callers still get
 /// back a plain Polly <see cref="ResiliencePipeline"/> and call <c>ExecuteAsync</c> on it exactly as
 /// before - no port-signature change at any existing call site.
+///
+/// `7-02`: <paramref name="pipelineName"/> is what lets <see cref="WithCircuitBreaker"/>/
+/// <see cref="WithBulkhead"/> tag their own instruments (<see cref="ResilienceMetrics"/>) by pipeline
+/// without either method taking a separate name parameter of its own - every existing caller already
+/// has this name at hand as its own private <c>PipelineName</c> constant
+/// (`Ago.Platform.Caching.Redis`'s "Redis", `Ago.Platform.Storage.S3`'s "S3"), so threading it through
+/// the constructor instead is a one-line change per call site, not a new concept.
 /// </summary>
-public sealed class ResiliencePolicyBuilder
+public sealed class ResiliencePolicyBuilder(string pipelineName)
 {
     private readonly ResiliencePipelineBuilder _pipeline = new();
 
@@ -58,6 +67,11 @@ public sealed class ResiliencePolicyBuilder
     /// </summary>
     public ResiliencePolicyBuilder WithCircuitBreaker(ResilienceCircuitBreakerOptions options, Func<Exception, bool> shouldHandle)
     {
+        // `7-02`: a live CircuitBreakerStateProvider, not an OnOpened/OnClosed/OnHalfOpened callback
+        // trio - Polly's own StateProvider always reflects the strategy's actual current state, so
+        // ResilienceMetrics's gauge callback reads it directly rather than this class maintaining a
+        // second, shadow copy of state transitions that could itself drift from the real thing.
+        var stateProvider = new CircuitBreakerStateProvider();
         _pipeline.AddCircuitBreaker(new CircuitBreakerStrategyOptions
         {
             FailureRatio = options.FailureRatio,
@@ -65,7 +79,9 @@ public sealed class ResiliencePolicyBuilder
             SamplingDuration = options.SamplingDuration,
             BreakDuration = options.BreakDuration,
             ShouldHandle = new PredicateBuilder().Handle<Exception>(shouldHandle),
+            StateProvider = stateProvider,
         });
+        ResilienceMetrics.RegisterBreaker(pipelineName, stateProvider);
         return this;
     }
 
@@ -84,7 +100,27 @@ public sealed class ResiliencePolicyBuilder
     /// </summary>
     public ResiliencePolicyBuilder WithBulkhead(ResilienceBulkheadOptions options)
     {
-        _pipeline.AddConcurrencyLimiter(options.MaxConcurrency, options.MaxQueuedActions);
+        // `7-02`: the full RateLimiterStrategyOptions form, not the AddConcurrencyLimiter(int, int)
+        // convenience overload this method used before - that overload builds the same
+        // ConcurrencyLimiter internally (via DefaultRateLimiterOptions, reproduced explicitly here)
+        // but exposes no OnRejected hook, and a bulkhead-rejection counter is exactly what this item
+        // adds. Verified directly against the pinned Polly.RateLimiting 8.5.2 API before relying on
+        // it (CLAUDE.md: measure, do not guess) - RateLimiter left null so the strategy builds its own
+        // ConcurrencyLimiter from DefaultRateLimiterOptions, the same as the convenience overload did.
+        _pipeline.AddRateLimiter(new RateLimiterStrategyOptions
+        {
+            DefaultRateLimiterOptions = new ConcurrencyLimiterOptions
+            {
+                PermitLimit = options.MaxConcurrency,
+                QueueLimit = options.MaxQueuedActions,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            },
+            OnRejected = _ =>
+            {
+                ResilienceMetrics.RecordBulkheadRejection(pipelineName);
+                return default;
+            },
+        });
         return this;
     }
 

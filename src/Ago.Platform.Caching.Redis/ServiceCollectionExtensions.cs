@@ -69,7 +69,7 @@ public static class ServiceCollectionExtensions
     private static ResiliencePipeline BuildResiliencePipeline(IServiceProvider sp)
     {
         var options = sp.GetRequiredService<IOptionsMonitor<ResiliencePipelineOptions>>().Get(PipelineName);
-        return new ResiliencePolicyBuilder()
+        return new ResiliencePolicyBuilder(PipelineName)
             .WithTimeout(options.Timeout!)
             .WithCircuitBreaker(options.CircuitBreaker!, static ex => ex is not OperationCanceledException)
             .Build();
