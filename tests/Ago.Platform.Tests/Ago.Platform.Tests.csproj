@@ -11,6 +11,12 @@
     <PackageReference Include="Polly.RateLimiting" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <!-- `7-01`: PlatformObservabilityTests builds a real ServiceCollection/IConfiguration and
+         resolves the OTel SDK's own TracerProvider to assert AddPlatformObservability's resource
+         attributes, rather than asserting against Hosting's own private fields. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="OpenTelemetry" />
   </ItemGroup>
 
   <ItemGroup>

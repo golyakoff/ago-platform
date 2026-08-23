@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Diagnostics;
+using System.Text.Json;
 using Ago.Platform.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -34,6 +35,12 @@ public sealed class NodeDeliveryConsumer(
     NodeId currentNode,
     ILogger<NodeDeliveryConsumer> logger) : BackgroundService
 {
+    // `7-01`: the last hop the trace must reach (this item's own backlog wording) - "Ago.Platform.
+    // Realtime" rather than a product name, same reasoning as RabbitMqTracing's own ActivitySource:
+    // this class runs for any product built on the platform, so it names its own spans generically
+    // and is picked up by AddPlatformObservability's "Ago.*" wildcard, never by a literal reference.
+    private static readonly ActivitySource ActivitySource = new("Ago.Platform.Realtime");
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var topic = NodeTopics.For(currentNode);
@@ -54,6 +61,13 @@ public sealed class NodeDeliveryConsumer(
 
             foreach (var connectionId in delivery.ConnectionIds)
             {
+                // A child of whatever Activity is current (the "{topic} process" span
+                // RabbitMqEventConsumer already started around this whole handler, itself parented
+                // from the outbox dispatch that published this delivery) - one span per connection,
+                // since one NodeDelivery can fan out to several connections belonging to the same
+                // recipient (several open tabs), each worth its own timing.
+                using var activity = ActivitySource.StartActivity("node_delivery.dispatch_to_connection", ActivityKind.Producer);
+                activity?.SetTag("ago.connection_id", connectionId.Value);
                 try
                 {
                     await dispatcher.DispatchAsync(connectionId, delivery.Method, delivery.PayloadJson, cancellationToken);

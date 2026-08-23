@@ -17,6 +17,11 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(o => o.Payload).HasColumnName("payload").HasColumnType("jsonb");
         builder.Property(o => o.PartitionKey).HasColumnName("partition_key");
         builder.Property(o => o.CorrelationId).HasColumnName("correlation_id");
+        // `7-01`: nullable, unbounded W3C traceparent length is fixed (00-{32 hex}-{16 hex}-{2 hex},
+        // 55 chars) but this stores it as text rather than a hardcoded varchar(55) - a wider future
+        // trace-context format (W3C tracestate, or a different propagator) should not need a schema
+        // change to fit.
+        builder.Property(o => o.TraceContext).HasColumnName("trace_context");
         builder.Property(o => o.PublishedAt).HasColumnName("published_at");
         builder.Property(o => o.Attempts).HasColumnName("attempts");
 

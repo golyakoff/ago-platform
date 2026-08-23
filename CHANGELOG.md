@@ -4,6 +4,44 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.13.0] - 2026-08-24
+
+### Added
+
+- `Ago.Platform.Hosting.AddPlatformObservability(configuration, serviceName)`: wires the OpenTelemetry
+  SDK's tracing provider - ASP.NET Core instrumentation, `HttpClient` instrumentation, Npgsql
+  instrumentation (no extra package: Npgsql has emitted its own Activities on an ActivitySource named
+  `Npgsql` since 6.0, picked up here with a bare `.AddSource("Npgsql")`), resource attributes
+  (`service.name` from the caller-supplied `serviceName`, `service.version`/`deployment.environment`
+  from the new `Otel:*`-bound, startup-validated `PlatformObservabilityOptions`), and an OTLP exporter
+  pointed at `Otel:Exporter:Endpoint`. One call from each `Ago.Chat` host's own `Program.cs`
+  (`7-01`'s Scope). Every manually-instrumented `ActivitySource` this platform or any product built on
+  it creates is picked up through one `"Ago.*"` wildcard subscription (`ActivitySourceWildcard`) rather
+  than a per-source list this project would otherwise need to keep current - the actual
+  platform/product seam for tracing, since this project has no access to a product's source and must
+  not need one to know its span names exist.
+- Trace context propagation through the outbox and the broker (`messaging.md`'s "the trace id captured
+  at write survives the poll-and-publish handoff"): `IOutboxWriter.Enqueue` gains an optional
+  `traceContext` parameter (the W3C `traceparent` of the trace an outbox row's event describes,
+  captured explicitly by the caller at write time rather than read from an ambient
+  `Activity.Current` - a caller that batches several unrelated messages into one physical commit, as
+  `Ago.Chat`'s pipeline batch writer does, cannot rely on "whatever is current" without mis-tagging
+  every row but the last in a batch), stored on the new nullable `OutboxMessage.TraceContext`/
+  `outbox.trace_context` column (`OutboxMessageConfiguration`). `Ago.Platform.Messaging.RabbitMq`'s
+  `RabbitMqEventPublisher` now injects the `traceparent` header from whatever `Activity` is current at
+  publish time (the caller - an outbox dispatcher, or a fan-out consumer's own ambient activity for a
+  second, ephemeral publish - is expected to have already started one, parented from the trace this
+  event belongs to); `RabbitMqEventConsumer` extracts it back into a real parent `ActivityContext` and
+  wraps every handler invocation in a span named `"{topic} process"` (OTel's own messaging semantic-
+  convention shape) - every consumer this platform or a product hosts gets a correctly-parented
+  message-processing span for free, from one adapter-level change, without needing to be touched
+  individually. Neither `EventEnvelope` nor either messaging port changes for this: propagation is
+  transport-level plumbing entirely inside the RabbitMQ adapter, the same discipline `adr/0006`
+  already states for everything else this adapter does with headers.
+- `Ago.Platform.Realtime.NodeDeliveryConsumer` starts a `node_delivery.dispatch_to_connection` span
+  per connection it dispatches to - realtime.md's last fan-out hop, the final stage `nfr.md`'s "traces
+  spanning hub -> handler -> DB -> outbox -> broker -> consumer -> delivery" names.
+
 ## [0.12.0] - 2026-08-23
 
 ### Added

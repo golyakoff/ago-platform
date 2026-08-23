@@ -11,7 +11,7 @@ namespace Ago.Platform.Persistence.Postgres;
 public sealed class EfOutboxWriter<TContext>(TContext dbContext) : IOutboxWriter
     where TContext : DbContext
 {
-    public void Enqueue(EventEnvelope envelope)
+    public void Enqueue(EventEnvelope envelope, string? traceContext = null)
     {
         var message = new OutboxMessage(
             envelope.MessageId,
@@ -20,7 +20,8 @@ public sealed class EfOutboxWriter<TContext>(TContext dbContext) : IOutboxWriter
             envelope.Version,
             envelope.Payload,
             envelope.PartitionKey,
-            envelope.CorrelationId);
+            envelope.CorrelationId,
+            traceContext);
 
         dbContext.Set<OutboxMessage>().Add(message);
     }
