@@ -27,6 +27,20 @@ public sealed class RabbitMqEventPublisher(RabbitMqConnection connection) : IEve
         {
             await channel.ExchangeDeclareAsync(envelope.Type, ExchangeType.Fanout, durable: true, cancellationToken: cancellationToken);
 
+            var headers = new Dictionary<string, object?> { ["x-version"] = envelope.Version };
+
+            // `7-01`: whatever Activity is current when this call is made carries the trace this
+            // publish belongs to (RabbitMqTracing's own remarks - the caller is expected to have
+            // already started one, parented from wherever the trace actually originated: the outbox
+            // dispatcher's `ago.chat.outbox.dispatch`, or a fan-out consumer's own ambient activity
+            // for the second, ephemeral publish realtime.md's Fan-out path makes). No current
+            // Activity (nothing is sampling, or a caller this item never reached) means no header -
+            // a consumer that finds none simply starts a fresh trace, same as today.
+            if (System.Diagnostics.Activity.Current?.Id is { } traceParent)
+            {
+                headers[RabbitMqTracing.TraceParentHeader] = traceParent;
+            }
+
             var properties = new BasicProperties
             {
                 Persistent = true,
@@ -34,7 +48,7 @@ public sealed class RabbitMqEventPublisher(RabbitMqConnection connection) : IEve
                 Type = envelope.Type,
                 Timestamp = new AmqpTimestamp(envelope.OccurredAt.ToUnixTimeSeconds()),
                 CorrelationId = envelope.CorrelationId.ToString(),
-                Headers = new Dictionary<string, object?> { ["x-version"] = envelope.Version },
+                Headers = headers,
             };
 
             await channel.BasicPublishAsync(

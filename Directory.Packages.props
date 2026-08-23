@@ -15,6 +15,12 @@
          documents fixing. -->
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <!-- `7-01`: the concrete packages (not just the .Abstractions ones above), needed only by
+         Ago.Platform.Tests to build a real ServiceCollection/IConfiguration against
+         AddPlatformObservability - every production project still depends on the .Abstractions
+         pair only, unchanged. -->
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="10.0.11" />
@@ -75,6 +81,21 @@
          deployment target stops being an architectural question" reasoning file-storage.md states. -->
     <PackageVersion Include="AWSSDK.S3" Version="4.0.102.3" />
     <PackageVersion Include="Testcontainers.Minio" Version="4.14.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Observability">
+    <!-- `7-01`: the OTel .NET SDK, pinned to its current stable line (1.18.0) across the SDK core,
+         the generic-host integration (`AddOpenTelemetry()`), the two instrumentation packages the
+         backlog names explicitly (ASP.NET Core, HttpClient - Npgsql needs no package at all, only
+         `.AddSource("Npgsql")`, since Npgsql has emitted its own Activities since 6.0), the OTLP
+         exporter, and the in-memory exporter used only by tests (this item's own Done-when: prove
+         correctness against an in-memory exporter, not a live Jaeger - `7-03`'s job). -->
+    <PackageVersion Include="OpenTelemetry" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.18.0" />
   </ItemGroup>
 
 </Project>

@@ -13,7 +13,7 @@ public sealed class OutboxMessage
 
     public OutboxMessage(
         Guid id, DateTimeOffset occurredAt, string type, int version, string payload, string partitionKey,
-        Guid correlationId)
+        Guid correlationId, string? traceContext = null)
     {
         Id = id;
         OccurredAt = occurredAt;
@@ -22,6 +22,7 @@ public sealed class OutboxMessage
         Payload = payload;
         PartitionKey = partitionKey;
         CorrelationId = correlationId;
+        TraceContext = traceContext;
     }
 
     public Guid Id { get; private set; }
@@ -37,6 +38,15 @@ public sealed class OutboxMessage
     public string PartitionKey { get; private set; } = null!;
 
     public Guid CorrelationId { get; private set; }
+
+    /// <summary>`7-01`: the W3C `traceparent` of the trace this row's event describes, captured by
+    /// the caller at write time (<see cref="Ago.Platform.Abstractions.IOutboxWriter.Enqueue"/>'s own
+    /// remarks) so the outbox dispatcher can re-parent a real child span to it at publish time
+    /// instead of starting a fresh, disconnected trace (messaging.md: "the trace id captured at the
+    /// write must survive the poll-and-publish handoff"). Null for any row staged before this
+    /// shipped, or by a caller this item did not instrument - the dispatcher treats that exactly
+    /// like today, publishing with no parent.</summary>
+    public string? TraceContext { get; private set; }
 
     public DateTimeOffset? PublishedAt { get; private set; }
 

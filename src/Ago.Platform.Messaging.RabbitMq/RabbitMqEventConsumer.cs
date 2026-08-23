@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using Ago.Platform.Abstractions;
 using RabbitMQ.Client;
@@ -67,6 +68,17 @@ public sealed class RabbitMqEventConsumer(RabbitMqConnection connection) : IEven
             var context = new RabbitMqMessageContext(
                 channel, delivery, retryQueueName, retryPolicy.DeadLetterName, retryPolicy.MaxAttempts, attempt);
 
+            // `7-01`: RabbitMqTracing's own remarks - extracts the `traceparent` header the
+            // publisher injected and starts a real child span in that same trace, named after the
+            // topic (OTel's own messaging semantic-convention shape, "{destination} process") so it
+            // reads correctly in Jaeger without this adapter needing to know what a consumer does
+            // with the message. Every specific consumer's own manual span (if any) nests inside this
+            // one automatically, since Activity.Current is what the handler below actually runs
+            // under - a genuine ambient parent, not a value the handler has to thread through itself.
+            RabbitMqTracing.TryParseTraceParent(GetTraceParent(delivery), out var parentContext);
+            using var activity = RabbitMqTracing.Source.StartActivity(
+                $"{topic} process", ActivityKind.Consumer, parentContext);
+
             try
             {
                 await handler(envelope, context, cancellationToken);
@@ -81,6 +93,14 @@ public sealed class RabbitMqEventConsumer(RabbitMqConnection connection) : IEven
 
         await channel.BasicConsumeAsync(queueName, autoAck: false, consumer, cancellationToken);
     }
+
+    // RabbitMQ.Client round-trips a header string as a raw byte[] on receive (AMQP's "long string"
+    // table encoding), not the string it was set with on publish - the same reason x-retry-attempt
+    // below goes through Convert rather than a direct cast.
+    private static string? GetTraceParent(BasicDeliverEventArgs delivery) =>
+        delivery.BasicProperties.Headers?.TryGetValue(RabbitMqTracing.TraceParentHeader, out var value) == true && value is not null
+            ? value switch { byte[] bytes => Encoding.UTF8.GetString(bytes), string s => s, _ => value.ToString() }
+            : null;
 
     private static int GetAttempt(BasicDeliverEventArgs delivery) =>
         delivery.BasicProperties.Headers?.TryGetValue("x-retry-attempt", out var value) == true && value is not null
