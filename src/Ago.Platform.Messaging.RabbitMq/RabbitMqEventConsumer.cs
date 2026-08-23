@@ -14,12 +14,20 @@ namespace Ago.Platform.Messaging.RabbitMq;
 /// scale - a single queue trivially preserves ordering by having only one consumer position, and the
 /// in-process <c>ConversationSequencer</c> that scales it is a separate, later concern
 /// (`concurrency.md`, not in this item's scope).
+///
+/// `5-11`: a `Competing` queue used to be named after the bare topic, with no way to tell "another
+/// replica of the same consumer" (correct - both belong on this queue) from "a completely different
+/// consumer type that also happens to subscribe to this topic" (wrong - each needs its own copy of
+/// every message) apart. Naming it `{topic}.{consumerName}` fixes that: replicas of one logical
+/// consumer pass the same name and correctly share a queue; two independent consumer types pass
+/// different names and correctly get one queue each.
 /// </summary>
 public sealed class RabbitMqEventConsumer(RabbitMqConnection connection) : IEventConsumer
 {
     public async Task SubscribeAsync(
         string topic,
         SubscriptionMode mode,
+        string consumerName,
         RetryPolicy retryPolicy,
         Func<EventEnvelope, IMessageContext, CancellationToken, Task> handler,
         CancellationToken cancellationToken)
@@ -29,7 +37,7 @@ public sealed class RabbitMqEventConsumer(RabbitMqConnection connection) : IEven
 
         await channel.ExchangeDeclareAsync(topic, ExchangeType.Fanout, durable: true, cancellationToken: cancellationToken);
 
-        var queueName = mode == SubscriptionMode.Competing ? topic : $"{topic}.{Guid.NewGuid():N}";
+        var queueName = mode == SubscriptionMode.Competing ? $"{topic}.{consumerName}" : $"{topic}.{Guid.NewGuid():N}";
         var exclusive = mode == SubscriptionMode.Broadcast;
         await channel.QueueDeclareAsync(
             queue: queueName, durable: !exclusive, exclusive: exclusive, autoDelete: exclusive,
