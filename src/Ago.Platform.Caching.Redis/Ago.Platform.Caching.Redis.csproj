@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Ago.Platform.Abstractions\Ago.Platform.Abstractions.csproj" />
     <ProjectReference Include="..\Ago.Platform.Kernel\Ago.Platform.Kernel.csproj" />
+    <ProjectReference Include="..\Ago.Platform.Resilience\Ago.Platform.Resilience.csproj" />
   </ItemGroup>
 
 </Project>

@@ -53,14 +53,20 @@
     <PackageVersion Include="Testcontainers.Redis" Version="4.14.0" />
   </ItemGroup>
 
-  <ItemGroup Label="Caching">
+  <ItemGroup Label="Resilience">
     <!-- The lean v8 resilience package (ResiliencePipeline), not the full classic-API `Polly`
-         package - one circuit breaker + timeout policy in one adapter class does not need the v7
-         Policy<T>/PolicyWrap surface. Replaces a hand-rolled circuit-breaker state machine
-         (closed/open/half-open, failure counting, timers) - well-trodden ground worth not
-         re-implementing for exactly one caller (3-04's open-question resolution: this stays inline
-         here rather than becoming a new Ago.Platform.Resilience project). -->
+         package - Ago.Platform.Resilience's builder only ever needs retry/timeout/circuit-breaker/
+         rate-limiter strategies, not the v7 Policy<T>/PolicyWrap surface. 3-04 originally kept this
+         inline in Ago.Platform.Caching.Redis rather than a shared project ("exactly one caller");
+         6-01 revisits that once Ago.Platform.Storage.S3 duplicated the same shape independently and
+         extracts Ago.Platform.Resilience for real. Polly.RateLimiting is the v8 family's
+         rate-limiter-based bulkhead - Polly.Core alone does not ship one; the classic Polly.Bulkhead
+         package targets the v7 API this repo deliberately does not take (6-01's confirmation against
+         this pin, not an assumption). Ago.Platform.Caching.Redis and Ago.Platform.Storage.S3 still
+         reference Polly.Core directly too, for the ResiliencePipeline type their adapters hold - only
+         ResiliencePipelineBuilder construction moves behind this package (arch-tested). -->
     <PackageVersion Include="Polly.Core" Version="8.5.2" />
+    <PackageVersion Include="Polly.RateLimiting" Version="8.5.2" />
   </ItemGroup>
 
   <ItemGroup Label="Storage">

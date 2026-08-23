@@ -4,6 +4,33 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.12.0] - 2026-08-23
+
+### Added
+
+- `Ago.Platform.Resilience` (new project): `ResiliencePolicyBuilder` - a fluent builder over Polly's
+  `ResiliencePipelineBuilder` (`WithTimeout`/`WithRetry`/`WithCircuitBreaker`/`WithBulkhead`/`Build`),
+  plus `ResiliencePipelineOptions` and its four groups (`ResilienceTimeoutOptions`,
+  `ResilienceRetryOptions`, `ResilienceCircuitBreakerOptions`, `ResilienceBulkheadOptions`) bound and
+  validated per named pipeline from `Resilience:{pipelineName}:*` via the new
+  `AddResiliencePipelineOptions` (`naming-and-structure.md`'s options-binding convention, extended
+  with .NET's named-options feature so two pipelines can coexist in one `IServiceCollection` without
+  colliding on one unqualified `IOptions<T>`). Replaces the two independently hand-rolled
+  `BuildResiliencePipeline()` implementations in `Ago.Platform.Caching.Redis` and
+  `Ago.Platform.Storage.S3` (5-04/5-02) - same shape, no shared code, no bulkhead concept in either -
+  with one shared builder both now consume; their configured values and observable behaviour are
+  unchanged, and their existing tests pass unchanged against it. Bulkhead is the one pattern
+  `resilience.md`'s boundary table names that nothing had implemented yet: built on Polly v8's
+  rate-limiter strategy (the `Polly.RateLimiting` package, wrapping
+  `System.Threading.RateLimiting.ConcurrencyLimiter`) rather than the classic `Polly.Bulkhead`
+  package, since `Directory.Packages.props` already pins the lean v8 `Polly.Core`, which does not
+  ship a classic bulkhead API. `Ago.Platform.Architecture.Tests`' new `ResilienceLayeringTests`
+  asserts `Ago.Platform.Resilience` is the only project that may construct a
+  `Polly.ResiliencePipelineBuilder`. Neither `Ago.Platform.Caching.Redis` nor `Ago.Platform.Storage.S3`
+  wires up the new bulkhead group - resilience.md's rows for Redis and S3 do not call for one - it
+  exists so `6-05`'s webhook dispatcher (the boundary that does need one) composes it from here
+  instead of writing a fourth ad hoc implementation (`6-01`).
+
 ## [0.11.0] - 2026-08-23
 
 ### Fixed

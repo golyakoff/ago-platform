@@ -7,6 +7,7 @@
     <Project Path="src/Ago.Platform.Messaging.RabbitMq/Ago.Platform.Messaging.RabbitMq.csproj" />
     <Project Path="src/Ago.Platform.Persistence.Postgres/Ago.Platform.Persistence.Postgres.csproj" />
     <Project Path="src/Ago.Platform.Realtime/Ago.Platform.Realtime.csproj" />
+    <Project Path="src/Ago.Platform.Resilience/Ago.Platform.Resilience.csproj" />
     <Project Path="src/Ago.Platform.Storage.S3/Ago.Platform.Storage.S3.csproj" />
   </Folder>
   <Folder Name="/tests/">
