@@ -4,6 +4,35 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.11.0] - 2026-08-23
+
+### Fixed
+
+- `Ago.Platform.Abstractions.IEventConsumer.SubscribeAsync` gains a required `consumerName`
+  parameter. `Ago.Platform.Messaging.RabbitMq`'s `Competing`-mode queue used to be named after the
+  bare topic, with nothing distinguishing "another replica of the same logical consumer" (correct -
+  both belong on one shared queue) from "a completely different consumer type that also subscribes
+  to this topic" (wrong - each needs its own independent copy of every message). Two or more such
+  consumer types silently shared one queue and split its messages between them via RabbitMQ's normal
+  competing-consumers dispatch, instead of each receiving every one.
+  Found live in `ago-chat`'s `5-11` while verifying widget attachments: `Ago.Chat.Worker`'s
+  `UnreadCounterConsumer` and `ConnectionFanoutConsumer` both subscribe `Competing` to
+  `MessageAccepted`, and ten operator-sent messages in a row landed entirely on one of the two,
+  never the other - real-time message delivery has been unreliable since `3-02` whenever both
+  consumers were running, which is the normal case. A regression test
+  (`RabbitMqPublishConsumeTests.Competing_TwoDifferentConsumerTypes_BothReceiveEveryMessageIndependently`)
+  reproduces the bug against a real broker and passes only with the fix.
+  Not a re-exposure of Kafka's own consumer-group mechanics through the port (`adr/0006` still holds
+  exchanges/bindings/offsets/partition counts inside the adapters) - `consumerName` is the caller
+  declaring *identity*, which `SubscriptionMode.Competing` cannot mean anything without on either
+  broker; see the port's own updated doc comment.
+
+### Breaking
+
+- Every `IEventConsumer.SubscribeAsync` call site must now pass a `consumerName` - stable per logical
+  consumer type, shared across replicas of that same type, distinct from every other consumer type
+  subscribed to the same topic.
+
 ## [0.10.0] - 2026-08-22
 
 ### Added

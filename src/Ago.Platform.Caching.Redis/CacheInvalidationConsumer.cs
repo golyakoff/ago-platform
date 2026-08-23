@@ -25,7 +25,7 @@ public sealed class CacheInvalidationConsumer(
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var retryPolicy = new RetryPolicy(MaxAttempts: 1, InitialBackoff: TimeSpan.Zero, DeadLetterName: $"{CacheTopics.Invalidated}.dlq");
-        return consumer.SubscribeAsync(CacheTopics.Invalidated, SubscriptionMode.Broadcast, retryPolicy, HandleAsync, stoppingToken);
+        return consumer.SubscribeAsync(CacheTopics.Invalidated, SubscriptionMode.Broadcast, "cache-invalidation", retryPolicy, HandleAsync, stoppingToken);
     }
 
     private async Task HandleAsync(EventEnvelope envelope, IMessageContext context, CancellationToken cancellationToken)

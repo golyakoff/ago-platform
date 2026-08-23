@@ -39,7 +39,10 @@ public sealed class NodeDeliveryConsumer(
         var topic = NodeTopics.For(currentNode);
         var retryPolicy = new RetryPolicy(MaxAttempts: 1, InitialBackoff: TimeSpan.Zero, DeadLetterName: $"{topic}.dlq");
 
-        return consumer.SubscribeAsync(topic, SubscriptionMode.Competing, retryPolicy, HandleAsync, stoppingToken);
+        // `5-11`: a stable name, even though nothing else subscribes to this node's own topic today -
+        // correct by construction rather than by the accident of being the only subscriber, the same
+        // discipline this fix asks of every other Competing subscription.
+        return consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "node-delivery", retryPolicy, HandleAsync, stoppingToken);
     }
 
     private async Task HandleAsync(EventEnvelope envelope, IMessageContext context, CancellationToken cancellationToken)

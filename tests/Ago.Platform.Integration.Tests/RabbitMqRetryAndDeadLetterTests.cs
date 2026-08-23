@@ -23,7 +23,7 @@ public sealed class RabbitMqRetryAndDeadLetterTests(RabbitMqFixture fixture)
         var consumer = new RabbitMqEventConsumer(connection);
 
         var attempts = new ConcurrentBag<Guid>();
-        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, retryPolicy, async (envelope, ctx, ct) =>
+        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "retry-consumer", retryPolicy, async (envelope, ctx, ct) =>
         {
             attempts.Add(envelope.MessageId);
             if (attempts.Count(id => id == envelope.MessageId) == 1)
@@ -54,7 +54,7 @@ public sealed class RabbitMqRetryAndDeadLetterTests(RabbitMqFixture fixture)
         var publisher = new RabbitMqEventPublisher(connection);
         var consumer = new RabbitMqEventConsumer(connection);
 
-        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, retryPolicy, async (_, ctx, ct) =>
+        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "poison-consumer", retryPolicy, async (_, ctx, ct) =>
         {
             // Always asks to retry - forces every delivery past MaxAttempts to dead-letter.
             await ctx.NackAsync(requeue: true, ct);

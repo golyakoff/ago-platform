@@ -18,7 +18,7 @@ public sealed class RabbitMqPublishConsumeTests(RabbitMqFixture fixture)
         var consumer = new RabbitMqEventConsumer(connection);
 
         var received = new ConcurrentBag<EventEnvelope>();
-        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, RetryPolicy, (envelope, ctx, ct) =>
+        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "consumer-a", RetryPolicy, (envelope, ctx, ct) =>
         {
             received.Add(envelope);
             return ctx.AckAsync(ct);
@@ -38,21 +38,24 @@ public sealed class RabbitMqPublishConsumeTests(RabbitMqFixture fixture)
     }
 
     [Fact]
-    public async Task Competing_TwoConsumers_EachMessageGoesToExactlyOne()
+    public async Task Competing_TwoReplicasOfTheSameConsumer_EachMessageGoesToExactlyOne()
     {
         var topic = RabbitMqTestHelpers.NewTopic();
         await using var connection = new RabbitMqConnection(fixture.CreateOptions());
         var publisher = new RabbitMqEventPublisher(connection);
         var consumer = new RabbitMqEventConsumer(connection);
 
+        // Same consumerName on both - two replicas of one logical consumer, sharing the load. This is
+        // Competing's actual purpose (horizontal scaling), distinct from the two-different-consumer-
+        // types scenario below, which found the real 5-11 bug.
         var receivedByA = new ConcurrentBag<Guid>();
         var receivedByB = new ConcurrentBag<Guid>();
-        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, RetryPolicy, (envelope, ctx, ct) =>
+        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "shared-consumer", RetryPolicy, (envelope, ctx, ct) =>
         {
             receivedByA.Add(envelope.MessageId);
             return ctx.AckAsync(ct);
         }, CancellationToken.None);
-        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, RetryPolicy, (envelope, ctx, ct) =>
+        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "shared-consumer", RetryPolicy, (envelope, ctx, ct) =>
         {
             receivedByB.Add(envelope.MessageId);
             return ctx.AckAsync(ct);
@@ -75,6 +78,49 @@ public sealed class RabbitMqPublishConsumeTests(RabbitMqFixture fixture)
         Assert.Equal(sentIds.OrderBy(x => x), allReceived.OrderBy(x => x));
     }
 
+    /// <summary>
+    /// `5-11`: found live - `UnreadCounterConsumer` and `ConnectionFanoutConsumer` both subscribe
+    /// `Competing` to `MessageAccepted`, and before this fix silently shared one queue, splitting
+    /// messages between them instead of each seeing every one. This is that bug, reproduced directly
+    /// against a real broker: two *different* consumer names on the same topic, both Competing, must
+    /// each receive every message independently - the opposite assertion from the replica test above.
+    /// </summary>
+    [Fact]
+    public async Task Competing_TwoDifferentConsumerTypes_BothReceiveEveryMessageIndependently()
+    {
+        var topic = RabbitMqTestHelpers.NewTopic();
+        await using var connection = new RabbitMqConnection(fixture.CreateOptions());
+        var publisher = new RabbitMqEventPublisher(connection);
+        var consumer = new RabbitMqEventConsumer(connection);
+
+        var receivedByA = new ConcurrentBag<Guid>();
+        var receivedByB = new ConcurrentBag<Guid>();
+        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "consumer-type-a", RetryPolicy, (envelope, ctx, ct) =>
+        {
+            receivedByA.Add(envelope.MessageId);
+            return ctx.AckAsync(ct);
+        }, CancellationToken.None);
+        await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "consumer-type-b", RetryPolicy, (envelope, ctx, ct) =>
+        {
+            receivedByB.Add(envelope.MessageId);
+            return ctx.AckAsync(ct);
+        }, CancellationToken.None);
+
+        const int count = 10;
+        var sentIds = new List<Guid>();
+        for (var i = 0; i < count; i++)
+        {
+            var envelope = new EventEnvelope(Guid.NewGuid(), topic, 1, $"key-{i}", DateTimeOffset.UtcNow, Guid.NewGuid(), "{}");
+            sentIds.Add(envelope.MessageId);
+            await publisher.PublishAsync(envelope, CancellationToken.None);
+        }
+
+        await RabbitMqTestHelpers.WaitUntilAsync(() => receivedByA.Count >= count && receivedByB.Count >= count, TimeSpan.FromSeconds(10));
+
+        Assert.Equal(sentIds.OrderBy(x => x), receivedByA.Distinct().OrderBy(x => x));
+        Assert.Equal(sentIds.OrderBy(x => x), receivedByB.Distinct().OrderBy(x => x));
+    }
+
     [Fact]
     public async Task Broadcast_TwoConsumers_BothReceiveEveryMessage()
     {
@@ -85,12 +131,12 @@ public sealed class RabbitMqPublishConsumeTests(RabbitMqFixture fixture)
 
         var receivedByA = new ConcurrentBag<Guid>();
         var receivedByB = new ConcurrentBag<Guid>();
-        await consumer.SubscribeAsync(topic, SubscriptionMode.Broadcast, RetryPolicy, (envelope, ctx, ct) =>
+        await consumer.SubscribeAsync(topic, SubscriptionMode.Broadcast, "consumer-a", RetryPolicy, (envelope, ctx, ct) =>
         {
             receivedByA.Add(envelope.MessageId);
             return ctx.AckAsync(ct);
         }, CancellationToken.None);
-        await consumer.SubscribeAsync(topic, SubscriptionMode.Broadcast, RetryPolicy, (envelope, ctx, ct) =>
+        await consumer.SubscribeAsync(topic, SubscriptionMode.Broadcast, "consumer-b", RetryPolicy, (envelope, ctx, ct) =>
         {
             receivedByB.Add(envelope.MessageId);
             return ctx.AckAsync(ct);
