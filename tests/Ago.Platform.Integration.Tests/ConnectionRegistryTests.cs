@@ -2,6 +2,8 @@
 using Ago.Platform.Realtime;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
 
 namespace Ago.Platform.Integration.Tests;
 
@@ -97,6 +99,54 @@ public sealed class ConnectionRegistryTests(RedisFixture fixture)
         Assert.DoesNotContain(visitorConnections, c => c.ConnectionId == visitorConn);
         Assert.Contains(visitorConnections, c => c.ConnectionId == survivingConn); // untouched - different node
         Assert.Empty(await registry.GetConnectionsAsync(operatorKey, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// `7-02`'s Done-when: proves a real value change. Registers two connections on one node, then
+    /// unregisters one, and asserts RealtimeMetrics' node-tagged gauge reflects exactly one remaining
+    /// - not merely that the instrument exists.
+    /// </summary>
+    [Fact]
+    public async Task RegisterAndUnregister_MoveTheConnectionsPerNodeGauge()
+    {
+        var exportedMetrics = new List<Metric>();
+        using var meterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddMeter(RealtimeMetrics.MeterName)
+            .AddInMemoryExporter(exportedMetrics)
+            .Build();
+
+        var registry = CreateRegistry();
+        var nodeId = new NodeId($"node-{Guid.NewGuid():N}");
+        var principal = new PrincipalKey($"visitor:{Guid.NewGuid()}");
+        var firstConnection = new ConnectionId(Guid.NewGuid().ToString());
+        var secondConnection = new ConnectionId(Guid.NewGuid().ToString());
+
+        await registry.RegisterAsync(firstConnection, nodeId, principal, CancellationToken.None);
+        await registry.RegisterAsync(secondConnection, nodeId, principal, CancellationToken.None);
+        Assert.Equal(2, ReadGaugeValue(meterProvider, exportedMetrics, nodeId.Value));
+
+        await registry.UnregisterAsync(firstConnection, nodeId, principal, CancellationToken.None);
+        Assert.Equal(1, ReadGaugeValue(meterProvider, exportedMetrics, nodeId.Value));
+    }
+
+    private static long ReadGaugeValue(MeterProvider meterProvider, List<Metric> exportedMetrics, string nodeId)
+    {
+        exportedMetrics.Clear();
+        meterProvider.ForceFlush();
+        var gauge = exportedMetrics.Single(m => m.Name == RealtimeMetrics.ConnectionsInstrumentName);
+
+        foreach (ref readonly var point in gauge.GetMetricPoints())
+        {
+            foreach (var tag in point.Tags)
+            {
+                if (tag.Key == "node" && (string?)tag.Value == nodeId)
+                {
+                    return point.GetGaugeLastValueLong();
+                }
+            }
+        }
+
+        throw new InvalidOperationException($"No gauge point found for node {nodeId}.");
     }
 
     private RedisConnectionRegistry CreateRegistry(TimeSpan? ttl = null) =>

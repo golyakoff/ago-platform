@@ -35,6 +35,10 @@ public sealed class RedisConnectionRegistry(
         var presenceKey = PresenceKey(principal);
         var nodeKey = NodeKey(nodeId);
 
+        // `7-02`: counted before the Redis write is even attempted, unconditionally - RealtimeMetrics's
+        // own remarks on why this is the node's own bookkeeping, not a Redis-derived value.
+        RealtimeMetrics.ConnectionRegistered(nodeId.Value);
+
         try
         {
             // Two round trips (write, then expire) rather than a Lua script: this registry is
@@ -62,6 +66,8 @@ public sealed class RedisConnectionRegistry(
     public async Task UnregisterAsync(ConnectionId connectionId, NodeId nodeId, PrincipalKey principal, CancellationToken cancellationToken)
     {
         var db = multiplexer.GetDatabase();
+
+        RealtimeMetrics.ConnectionUnregistered(nodeId.Value);
 
         try
         {
@@ -126,6 +132,8 @@ public sealed class RedisConnectionRegistry(
     {
         var db = multiplexer.GetDatabase();
         var nodeKey = NodeKey(nodeId);
+
+        RealtimeMetrics.NodeRemoved(nodeId.Value);
 
         try
         {

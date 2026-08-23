@@ -36,10 +36,24 @@ public sealed class RedisCache(IConnectionMultiplexer multiplexer, ResiliencePip
             // already does the same .WaitAsync(cancellationToken) for exactly this reason).
             var value = await resilience.ExecuteAsync(
                 async ct => await Database.StringGetAsync(key.Value).WaitAsync(ct), cancellationToken);
-            return value.IsNullOrEmpty ? default : JsonSerializer.Deserialize<T>((string)value!);
+
+            // `7-02`: caching.md's "cache hit ratio per key namespace" - recorded here, the one place
+            // every read (a direct GetAsync call, and GetOrCreateAsync's own double-checked reads)
+            // funnels through, rather than at each of GetOrCreateAsync's several call sites to this
+            // method. A Redis failure below is treated as a miss for the caller (the existing
+            // "advice, not truth" contract) but is deliberately *not* counted here - see the catch
+            // block's own remarks.
+            var hit = !value.IsNullOrEmpty;
+            CachingMetrics.RecordAccess(key, hit);
+            return hit ? JsonSerializer.Deserialize<T>((string)value!) : default;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // Not counted as a miss: a Redis outage is a different, already-separately-observable
+            // condition (the breaker state this item's ResilienceMetrics also exports) - folding it
+            // into the hit-ratio counter would silently depress the ratio during an outage in a way
+            // indistinguishable from a genuinely cold cache, which is exactly the ambiguity a
+            // dashboard reader would have no way to resolve.
             logger.LogDebug(ex, "Cache read failed for {Key} - treating it as a miss.", key);
             return default;
         }

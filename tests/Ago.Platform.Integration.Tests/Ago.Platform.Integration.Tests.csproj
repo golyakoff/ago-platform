@@ -16,6 +16,10 @@
     <PackageReference Include="AWSSDK.S3" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <!-- `7-02`: metrics tests resolve OpenTelemetry's own in-memory reader, the same "test the real
+         collaborator" bar `Ago.Platform.Tests`' PlatformObservabilityTests already holds tracing to. -->
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,6 +29,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ago.Platform.Abstractions\Ago.Platform.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Caching.Redis\Ago.Platform.Caching.Redis.csproj" />
+    <ProjectReference Include="..\..\src\Ago.Platform.Hosting\Ago.Platform.Hosting.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Kernel\Ago.Platform.Kernel.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Persistence.Postgres\Ago.Platform.Persistence.Postgres.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Messaging.RabbitMq\Ago.Platform.Messaging.RabbitMq.csproj" />

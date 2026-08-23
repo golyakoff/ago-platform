@@ -1,6 +1,8 @@
 ﻿using Ago.Platform.Abstractions;
 using Ago.Platform.Caching.Redis;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
 using Polly;
 using StackExchange.Redis;
 
@@ -130,6 +132,63 @@ public sealed class RedisCacheTests(RedisFixture fixture)
         Assert.False(first.Value);
         Assert.False(second.Value);
         Assert.Equal(1, calls);
+    }
+
+    /// <summary>
+    /// `7-02`'s Done-when: proves a real value change, not just that the instrument was registered.
+    /// Forces a miss (cold key), then a hit (immediate re-read), and asserts CachingMetrics'
+    /// namespace-tagged counter recorded exactly one of each.
+    /// </summary>
+    [Fact]
+    public async Task GetAsync_ColdKeyThenWarmKey_RecordsOneMissThenOneHit_TaggedByNamespace()
+    {
+        var exportedMetrics = new List<Metric>();
+        using var meterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddMeter(CachingMetrics.MeterName)
+            .AddInMemoryExporter(exportedMetrics)
+            .Build();
+
+        var cache = CreateCache();
+        var @namespace = $"test-namespace-{Guid.NewGuid():N}";
+        var key = new CacheKey($"{@namespace}:{Guid.NewGuid():N}");
+
+        Assert.Null(await cache.GetAsync<string>(key, CancellationToken.None));
+        await cache.SetAsync(key, "value", new CacheEntryOptions(TimeSpan.FromMinutes(1)), CancellationToken.None);
+        Assert.Equal("value", await cache.GetAsync<string>(key, CancellationToken.None));
+
+        meterProvider.ForceFlush();
+        var access = exportedMetrics.Single(m => m.Name == CachingMetrics.CacheAccessInstrumentName);
+
+        Assert.Equal(1, SumMatching(access, @namespace, "miss"));
+        Assert.Equal(1, SumMatching(access, @namespace, "hit"));
+    }
+
+    private static long SumMatching(Metric metric, string @namespace, string outcome)
+    {
+        long total = 0;
+        foreach (ref readonly var point in metric.GetMetricPoints())
+        {
+            string? pointNamespace = null;
+            string? pointOutcome = null;
+            foreach (var tag in point.Tags)
+            {
+                if (tag.Key == "namespace")
+                {
+                    pointNamespace = tag.Value as string;
+                }
+                else if (tag.Key == "outcome")
+                {
+                    pointOutcome = tag.Value as string;
+                }
+            }
+
+            if (pointNamespace == @namespace && pointOutcome == outcome)
+            {
+                total += point.GetSumLong();
+            }
+        }
+
+        return total;
     }
 
     private sealed record FalsyResult(bool Value);

@@ -3,6 +3,7 @@ using Ago.Platform.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
 namespace Ago.Platform.Tests;
@@ -55,6 +56,36 @@ public class PlatformObservabilityTests
 
         Assert.Equal("0.0.0", attributes["service.version"]);
         Assert.Equal("local", attributes["deployment.environment"]);
+    }
+
+    /// <summary>
+    /// `7-02`'s own judgment call, folding metrics into this existing method rather than a sibling
+    /// `AddPlatformMetrics` (this file's own remarks and the method's own doc comment explain why) -
+    /// this is the metrics-signal counterpart to
+    /// <see cref="AddPlatformObservability_SetsResourceAttributes_FromTheServiceNameParameterAndBoundOptions"/>,
+    /// resolving the real <see cref="MeterProvider"/> the OTel SDK registers rather than a private
+    /// field.
+    /// </summary>
+    [Fact]
+    public void AddPlatformObservability_RegistersAMeterProvider_WithTheSameResourceAttributesAsTracing()
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Otel:Exporter:Endpoint"] = "http://localhost:4317",
+            ["Otel:ServiceVersion"] = "1.2.3",
+            ["Otel:DeploymentEnvironment"] = "test",
+        });
+
+        var services = new ServiceCollection();
+        services.AddPlatformObservability(configuration, "Ago.Chat.Api");
+        using var provider = services.BuildServiceProvider();
+
+        var meterProvider = provider.GetRequiredService<MeterProvider>();
+        var attributes = meterProvider.GetResource().Attributes.ToDictionary(a => a.Key, a => a.Value);
+
+        Assert.Equal("Ago.Chat.Api", attributes["service.name"]);
+        Assert.Equal("1.2.3", attributes["service.version"]);
+        Assert.Equal("test", attributes["deployment.environment"]);
     }
 
     [Fact]
