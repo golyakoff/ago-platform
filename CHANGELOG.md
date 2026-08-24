@@ -10,13 +10,18 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 
 - `Ago.Platform.Hosting.AddPlatformObservability` now also wires the OpenTelemetry SDK's `MeterProvider`
   (`7-02`): ASP.NET Core and `HttpClient` metrics instrumentation (the same two packages `7-01` already
-  referenced for tracing double as their own metrics source - no new package), an OTLP exporter for
-  the metrics signal pointed at the same `Otel:Exporter:Endpoint`, and a new `"Ago.*"` wildcard `Meter`
-  subscription (`ServiceCollectionExtensions.MeterWildcard`) mirroring `7-01`'s `ActivitySourceWildcard`.
-  Folded into the existing method rather than a new sibling `AddPlatformMetrics` - every host already
-  calls `AddPlatformObservability` exactly once from its own `Program.cs`, and both signals configure
-  the same OTel SDK builder, so a second call would only duplicate resource/options setup and add a
-  step to forget.
+  referenced for tracing double as their own metrics source - no new package), a Prometheus scrape
+  endpoint (`OpenTelemetry.Exporter.Prometheus.AspNetCore`, pinned `1.18.0-beta.1` - this package has
+  never shipped a stable release, tracking the SDK's own 1.18.0 line instead), and a new `"Ago.*"`
+  wildcard `Meter` subscription (`ServiceCollectionExtensions.MeterWildcard`) mirroring `7-01`'s
+  `ActivitySourceWildcard`. Metrics deliberately do **not** share tracing's OTLP-push exporter to
+  `Otel:Exporter:Endpoint` (Jaeger) - an earlier draft of this change did exactly that and shipped with
+  it, until live verification while building `7-03` found every metric silently going nowhere: Jaeger's
+  OTLP receiver only implements the trace collector service, and Prometheus's own model is pull/scrape
+  in the first place, not push. Folded into the existing method rather than a new sibling
+  `AddPlatformMetrics` - every host already calls `AddPlatformObservability` exactly once from its own
+  `Program.cs`, and both signals configure the same OTel SDK builder, so a second call would only
+  duplicate resource/options setup and add a step to forget.
 - `Ago.Platform.Resilience.ResiliencePolicyBuilder`'s constructor now takes a required `pipelineName`
   (a breaking change to this pre-1.0 package - every caller already had this value at hand as its own
   private `PipelineName` constant, e.g. `Ago.Platform.Caching.Redis`'s `"Redis"`,

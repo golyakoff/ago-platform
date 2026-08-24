@@ -94,6 +94,16 @@
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <!-- `7-02` fix (found live while verifying `7-03`): metrics were wired as an OTLP push exporter
+         sharing `Otel:Exporter:Endpoint` with tracing - which points at Jaeger, and Jaeger does not
+         implement the OTLP metrics collector service, so no metric ever actually reached anything.
+         Prometheus needs a pull/scrape `/metrics` endpoint instead, which this package provides
+         (`.AddPrometheusExporter()` on the MeterProvider builder, `app.MapPrometheusScrapingEndpoint()`
+         on each host). Pinned to 1.18.0-beta.1, matching the SDK's own 1.18.0 line - this package has
+         never shipped a stable release across its entire history (confirmed against the real NuGet
+         flat-container index, not assumed), a known, long-standing characteristic of this specific
+         package, not a mistake or a stand-in for a "real" version that will appear later. -->
+    <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.18.0-beta.1" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.18.0" />
   </ItemGroup>
