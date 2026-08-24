@@ -28,8 +28,11 @@ public static class ServiceCollectionExtensions
     /// `Webhooks`) - wires both OTel signals this platform ships, tracing (`7-01`) and metrics
     /// (`7-02`): ASP.NET Core, HttpClient and Npgsql instrumentation (tracing only - Npgsql has no
     /// metrics instrumentation to add), resource attributes that make every host's telemetry
-    /// distinguishable in one Jaeger/Prometheus pair, and an OTLP exporter per signal pointed at
-    /// <c>Otel:Exporter:Endpoint</c>. This is deliberately the platform/product seam
+    /// distinguishable in one Jaeger/Prometheus pair, an OTLP exporter for traces pointed at
+    /// <c>Otel:Exporter:Endpoint</c> (Jaeger), and a Prometheus scrape endpoint for metrics - the two
+    /// signals use different transports deliberately (Jaeger's OTLP receiver only implements the trace
+    /// collector service; Prometheus's own model is pull, not push - a `7-02` mistake found and fixed
+    /// live while verifying `7-03`, see the metrics builder below for the full story). This is deliberately the platform/product seam
     /// clean-architecture.md describes for `Ago.Platform.Hosting` itself: it can wire *generic* OTel
     /// SDK instrumentation (nothing here has ever heard of a conversation or a visitor) but cannot
     /// start the *manual* spans/instruments a product's own hub methods, pipeline, outbox dispatcher
@@ -107,7 +110,18 @@ public static class ServiceCollectionExtensions
                 // consumer RED/DLQ counters) in one wildcard subscription, the OTel .NET SDK's own
                 // supported wildcard match for AddMeter, mirroring AddSource's.
                 .AddMeter(MeterWildcard)
-                .AddOtlpExporter(otlp => otlp.Endpoint = options.Exporter.Endpoint!));
+                // `7-02` fix (found live while verifying `7-03`): metrics do NOT get the same
+                // AddOtlpExporter(...) tracing uses above. Prometheus's own model is pull/scrape, not
+                // push - and the OTLP push this originally shipped with pointed at the same
+                // Otel:Exporter:Endpoint as tracing (Jaeger), which does not implement the OTLP
+                // *metrics* collector service at all, so every metric silently went nowhere. Confirmed
+                // live: a running host's own /metrics returned a bare 404 before this fix, and
+                // Prometheus's targets page showed every Ago.Chat.* target DOWN with a real connection
+                // failure, not a wiring mistake in `7-03`'s own scrape config. AddPrometheusExporter()
+                // is what actually gives Prometheus something to scrape - `7-03`'s own backlog scope
+                // ("Prometheus scrape config targeting each host's /metrics endpoint") already named
+                // pull as the intended model, this just makes the code match it.
+                .AddPrometheusExporter());
 
         return services;
     }
