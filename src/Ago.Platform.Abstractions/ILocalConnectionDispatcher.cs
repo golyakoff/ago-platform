@@ -8,8 +8,18 @@
 /// this. A connection that is no longer locally known (already disconnected) is not an error: the
 /// implementation should simply do nothing for it, matching realtime.md's "a stale entry causes a
 /// harmless failed delivery."
+///
+/// `7-08`: doing nothing is still reported, as <see cref="DispatchOutcome.ConnectionNotLocal"/>.
+/// The behaviour is unchanged - the caller still treats both outcomes identically and still
+/// acknowledges the delivery either way - but the difference is now visible, which it was not, and
+/// which is why "did the server even try to deliver to that connection" took an hour of reading
+/// code to answer.
 /// </summary>
 public interface ILocalConnectionDispatcher
 {
-    Task DispatchAsync(ConnectionId connectionId, string method, string payloadJson, CancellationToken cancellationToken);
+    /// <summary>Pushes to one connection this process may own. Returns
+    /// <see cref="DispatchOutcome.Delivered"/> only if this process actually held the connection and
+    /// handed the payload to its transport; <see cref="DispatchOutcome.ConnectionNotLocal"/>
+    /// otherwise. Never throws for an unknown connection - that is a no-op, not an error.</summary>
+    Task<DispatchOutcome> DispatchAsync(ConnectionId connectionId, string method, string payloadJson, CancellationToken cancellationToken);
 }

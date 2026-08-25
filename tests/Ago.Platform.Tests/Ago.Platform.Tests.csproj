@@ -31,6 +31,11 @@
     <ProjectReference Include="..\..\src\Ago.Platform.Kernel\Ago.Platform.Kernel.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Hosting\Ago.Platform.Hosting.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Resilience\Ago.Platform.Resilience.csproj" />
+    <!-- `7-08`: NodeDeliveryDispatchMetricsTests drives NodeDeliveryConsumer through a fake
+         IEventConsumer - no broker, no Redis, nothing to containerise - so it belongs at this level
+         rather than in Ago.Platform.Integration.Tests, which is where every other Realtime test
+         lives only because those genuinely need containers. -->
+    <ProjectReference Include="..\..\src\Ago.Platform.Realtime\Ago.Platform.Realtime.csproj" />
   </ItemGroup>
 
 </Project>

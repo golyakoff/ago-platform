@@ -4,6 +4,52 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.17.0] - 2026-08-25
+
+`0.16.0` is deliberately skipped here: it is claimed by `5-13`, whose branch was already pushed and
+in review when this work started. Two branches taking one version is a collision no merge tool
+catches, so `7-08` takes the next one instead of racing for it.
+
+### Changed
+
+- **Breaking.** `Ago.Platform.Abstractions.ILocalConnectionDispatcher.DispatchAsync` now returns
+  `Task<DispatchOutcome>` instead of `Task` (`7-08`). Behaviour is unchanged - an unknown connection
+  is still a silent no-op, and `NodeDeliveryConsumer` still acknowledges every delivery regardless of
+  per-connection outcome - but the implementation now *reports* which of the two happened, which
+  nothing could previously tell. The outcome comes from the dispatcher itself rather than from the
+  caller checking a proxy for the same fact (the node's `LocalConnectionTracker`, say), because a
+  proxy is only correct for as long as every implementation happens to agree with it: the shape of
+  defect `7-07` found in the connections gauge. Implementors return `DispatchOutcome.Delivered` when
+  the process held the connection and pushed to its transport, `DispatchOutcome.ConnectionNotLocal`
+  otherwise.
+- **Breaking.** `Ago.Platform.Abstractions.INodeFanoutPublisher.PublishAsync` now returns
+  `Task<FanoutResult>` instead of `Task` (`7-08`) - what it resolved, per recipient. Source-compatible
+  for callers that simply `await` it; implementors (test doubles, mostly) change. The platform returns
+  the numbers rather than recording a metric from them because the dimension that makes them useful
+  is which *kind* of principal each recipient is - a visitor with no connection is ordinary, an
+  operator with none is not - and "visitor" and "operator" are product concepts the platform must
+  never learn (clean-architecture.md's qualifying rule). Deriving a tag from `PrincipalKey`'s text
+  would also give the platform an instrument whose cardinality it cannot bound.
+
+### Added
+
+- `Ago.Platform.Abstractions.FanoutResult` / `ResolvedRecipient`: the recipients a fan-out resolved
+  and how many live connections the registry had for each. `TotalConnections` is the sum - one
+  recipient with three open tabs is three, which is the distinction the fan-out path had no way of
+  reporting before.
+- `Ago.Platform.Abstractions.DispatchOutcome`: `Delivered` / `ConnectionNotLocal`.
+- `Ago.Platform.Realtime.NodeFanoutPublisher` now sets `ago.fanout.recipients`,
+  `ago.fanout.connections` and `ago.fanout.nodes` on the span that is already current - the
+  `"{topic} process"` span `7-01` starts around the consumer handler that called into it - rather
+  than starting a child span of its own. All three are counted off the lists the method has just
+  built, so there is no second number that can drift from the first.
+- `Ago.Platform.Realtime.RealtimeMetrics`' new counter `ago.platform.realtime.dispatches`, tagged
+  `node` (matching the connections gauge, so the two read side by side) and `outcome`
+  (`delivered` / `connection_not_local` / `failed`). This is the number that was missing: how many
+  of the deliveries a node was handed actually met a connection it still holds.
+  `ConnectionDrainCoordinator` - the dispatcher port's other caller - deliberately does **not** feed
+  it, so a rolling deploy's `"Reconnect"` pushes never look like a burst of message delivery.
+
 ## [0.16.0] - 2026-08-25
 
 ### Fixed

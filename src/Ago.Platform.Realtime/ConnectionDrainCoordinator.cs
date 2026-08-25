@@ -52,6 +52,11 @@ public sealed class ConnectionDrainCoordinator(
                 // remarks).
                 var after = TimeSpan.FromSeconds(Random.Shared.NextDouble() * options.Value.MaxReconnectJitter.TotalSeconds);
                 var payload = JsonSerializer.Serialize(new { after });
+                // `7-08`: the returned DispatchOutcome is deliberately dropped, and deliberately not
+                // counted on RealtimeMetrics' dispatch counter. That instrument describes the
+                // fan-out path's deliveries; feeding a drain's Reconnect hints into it would make
+                // every rolling deploy look like a burst of message delivery - exactly the
+                // "instrument counts a second, unrelated mechanism" defect `7-07` found.
                 await dispatcher.DispatchAsync(connectionId, "Reconnect", payload, cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

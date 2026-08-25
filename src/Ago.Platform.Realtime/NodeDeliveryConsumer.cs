@@ -28,6 +28,13 @@ namespace Ago.Platform.Realtime;
 /// requeue this message - unlike a consumer whose work is only correct once retried to success
 /// (`Ago.Chat.Worker`'s <c>UnreadCounterConsumer</c>, for contrast), nothing here is retried into
 /// correctness.
+///
+/// `7-08`: acknowledging regardless is unchanged - what changed is that the per-connection outcome
+/// is no longer discarded. Each dispatch reports whether this node still held the connection
+/// (<see cref="DispatchOutcome"/>), and that becomes both a span attribute and one point on
+/// <see cref="RealtimeMetrics.DispatchesInstrumentName"/>. A redelivered <see cref="NodeDelivery"/>
+/// counts again, deliberately: the instrument describes dispatch *attempts this node made*, and a
+/// redelivery is a second real attempt, not a double-count of the first.
 /// </summary>
 public sealed class NodeDeliveryConsumer(
     IEventConsumer consumer,
@@ -68,9 +75,13 @@ public sealed class NodeDeliveryConsumer(
                 // recipient (several open tabs), each worth its own timing.
                 using var activity = ActivitySource.StartActivity("node_delivery.dispatch_to_connection", ActivityKind.Producer);
                 activity?.SetTag("ago.connection_id", connectionId.Value);
+                string outcome;
                 try
                 {
-                    await dispatcher.DispatchAsync(connectionId, delivery.Method, delivery.PayloadJson, cancellationToken);
+                    var dispatched = await dispatcher.DispatchAsync(connectionId, delivery.Method, delivery.PayloadJson, cancellationToken);
+                    outcome = dispatched == DispatchOutcome.Delivered
+                        ? RealtimeMetrics.DeliveredOutcome
+                        : RealtimeMetrics.ConnectionNotLocalOutcome;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -78,7 +89,13 @@ public sealed class NodeDeliveryConsumer(
                     // node's batch from being delivered - realtime.md's "harmless failed delivery"
                     // applies per connection, not per envelope.
                     logger.LogDebug(ex, "Failed to dispatch to connection {ConnectionId} - continuing with the rest of the batch.", connectionId);
+                    outcome = RealtimeMetrics.FailedOutcome;
                 }
+
+                // Recorded after the try/catch rather than inside it, so every path through this
+                // loop lands on exactly one point and no path lands on two.
+                activity?.SetTag("ago.dispatch.outcome", outcome);
+                RealtimeMetrics.RecordDispatch(currentNode, outcome);
             }
 
             await context.AckAsync(cancellationToken);
