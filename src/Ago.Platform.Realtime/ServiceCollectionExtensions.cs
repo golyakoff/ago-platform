@@ -43,7 +43,17 @@ public static class ServiceCollectionExtensions
         // readonly record structs throughout this codebase, and changing that for DI's convenience
         // was not worth it). The non-generic, Type-based overload has no such constraint.
         services.AddSingleton(typeof(NodeId), _ => (object)ResolveNodeId());
-        services.AddSingleton<LocalConnectionTracker>();
+        // `7-07`: the tracker is also the connections gauge's source, and this is the only place
+        // that knows both which tracker this host has and which node it is - so the metric is wired
+        // here, in the composition root, rather than by the tracker reaching for a static or by a
+        // counter maintained inside RedisConnectionRegistry (which is what shipped in `7-02` and
+        // counted heartbeat refreshes as connections).
+        services.AddSingleton(serviceProvider =>
+        {
+            var tracker = new LocalConnectionTracker();
+            RealtimeMetrics.TrackNode(serviceProvider.GetRequiredService<NodeId>(), tracker);
+            return tracker;
+        });
         services.AddSingleton<IConnectionRegistry, RedisConnectionRegistry>();
         // Depends on IEventPublisher/IClock being registered by the host's own composition root
         // (AddRabbitMqMessaging, AddPlatformKernel) - not this method's concern to register them.

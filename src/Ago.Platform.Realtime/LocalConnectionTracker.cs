@@ -19,6 +19,12 @@ public sealed class LocalConnectionTracker
 
     public void Remove(ConnectionId connectionId) => _connections.TryRemove(connectionId, out _);
 
+    /// <summary>`7-07`: how many connections this node holds right now - the value
+    /// <see cref="RealtimeMetrics"/>' connections gauge reports, read at collection time rather than
+    /// tracked by a counter alongside it. Cheaper than <see cref="Snapshot"/> (which copies the
+    /// whole dictionary) for a caller that only needs the size.</summary>
+    public int Count => _connections.Count;
+
     /// <summary>3-02: lets a host's <c>ILocalConnectionDispatcher</c> learn which principal (and so
     /// which transport-specific channel - a hub type, in <c>Ago.Chat.Api</c>'s case) a connection id
     /// belongs to, without the platform needing to know what a "hub type" is. <see langword="null"/>
