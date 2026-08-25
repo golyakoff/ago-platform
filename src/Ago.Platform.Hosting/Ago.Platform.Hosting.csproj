@@ -1,33 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <!-- `7-02` fix: OpenTelemetry.Exporter.Prometheus.AspNetCore has never shipped a stable release
-         (confirmed against the real NuGet flat-container index, not assumed) - it tracks the OTel SDK's
-         own version line as a perpetual beta, a known, long-standing characteristic of this specific
-         package across the wider .NET ecosystem, not a placeholder for a "real" version that will
-         appear later. NU5104 ("a stable package must not depend on a prerelease package") is correct
-         in general and stays enabled for every other dependency; suppressed here, scoped to this one
-         known exception, not solution-wide. -->
-    <NoWarn>$(NoWarn);NU5104</NoWarn>
-  </PropertyGroup>
-
   <ItemGroup>
+    <!-- `7-09`: this list is deliberately the whole of it. Every product host in every repository
+         must reference this package in order to exist at all - it holds IProductModule, the
+         platform/product seam - so anything added here is added to every host of every shape,
+         forever, whether or not that host can use it. The OpenTelemetry packages that used to sit
+         below moved to Ago.Platform.Observability for exactly that reason (adr/0046); the arch test
+         HostingPackagingTests keeps this list from growing back by accident. -->
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Options" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
-    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
-    <!-- `7-01`: AddPlatformObservability's own dependencies - the OTel SDK's generic-host
-         integration plus the two instrumentation packages the backlog names (Npgsql needs none of
-         its own, see Directory.Packages.props's remarks). -->
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
-    <!-- `7-02` fix: metrics' own scrape endpoint - replaces the OTLP push exporter metrics originally
-         (and wrongly) shared with tracing above; see ServiceCollectionExtensions.cs's own remarks on
-         AddPrometheusExporter() for why. -->
-    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
   </ItemGroup>
 
   <ItemGroup>

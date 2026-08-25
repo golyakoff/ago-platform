@@ -1,17 +1,17 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace Ago.Platform.Hosting;
+namespace Ago.Platform.Observability;
 
 /// <summary>
 /// Bound from <c>Otel:*</c> (naming-and-structure.md's options-validation rule: a typo in a key
 /// must fail the pod, not silently disable a feature - here that would mean shipping traces nobody
-/// receives). <see cref="ServiceName"/> is deliberately not bound from configuration: it is passed
-/// as a parameter to <see cref="ServiceCollectionExtensions.AddPlatformObservability"/> instead
-/// (each host's own <c>Program.cs</c> literally states its own name, `Ago.Chat.Api`/`Worker`/
-/// `Webhooks`, the same way <c>ChatModule.Name</c> does) - three near-identical
-/// <c>appsettings.json</c> files differing in one string is a worse failure mode (copy-paste the
-/// wrong one, ship two hosts both claiming to be `Ago.Chat.Api`) than a value the host's own source
-/// already unambiguously knows.
+/// receives). The service name is deliberately not bound from configuration: it is passed
+/// as a parameter to
+/// <see cref="ObservabilityServiceCollectionExtensions.AddPlatformObservability"/> instead
+/// (each host's own <c>Program.cs</c> literally states its own name, the same way its
+/// <c>IProductModule.Name</c> does) - several near-identical <c>appsettings.json</c> files differing
+/// in one string is a worse failure mode (copy-paste the wrong one, ship two hosts both claiming to
+/// be the same service) than a value the host's own source already unambiguously knows.
 /// </summary>
 public sealed class PlatformObservabilityOptions : IValidatableObject
 {

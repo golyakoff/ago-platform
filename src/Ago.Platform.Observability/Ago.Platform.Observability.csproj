@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- `7-09`: OpenTelemetry.Exporter.Prometheus.AspNetCore has never shipped a stable release
+         (confirmed against the real NuGet flat-container index, not assumed) - it tracks the OTel SDK's
+         own version line as a perpetual beta, a known, long-standing characteristic of this specific
+         package across the wider .NET ecosystem, not a placeholder for a "real" version that will
+         appear later. NU5104 ("a stable package must not depend on a prerelease package") is correct
+         in general and stays enabled for every other dependency; suppressed here, scoped to this one
+         known exception, not solution-wide. Moved here from Ago.Platform.Hosting with the rest of the
+         telemetry wiring - the suppression now sits on the one package whose consumers actually asked
+         for a Prometheus scrape endpoint, rather than on the package every product host must reference
+         in order to exist. -->
+    <NoWarn>$(NoWarn);NU5104</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+    <!-- `7-01`/`7-02`, moved here by `7-09`: AddPlatformObservability's own dependencies - the OTel
+         SDK's generic-host integration plus the two instrumentation packages the backlog names
+         (Npgsql needs none of its own, see Directory.Packages.props's remarks) - plus the OTLP
+         exporter for traces and the Prometheus scrape exporter for metrics. Two of these
+         (Instrumentation.AspNetCore, Exporter.Prometheus.AspNetCore) are ASP.NET Core-shaped, which
+         is the whole reason this project exists separately: a generic host cannot use them and must
+         not be made to carry them (adr/0046). -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
+  </ItemGroup>
+
+</Project>
