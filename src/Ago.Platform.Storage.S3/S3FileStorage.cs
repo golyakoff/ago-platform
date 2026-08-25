@@ -26,18 +26,31 @@ public sealed class S3FileStorage(IAmazonS3 client, S3StorageOptions options, Re
     public async Task<PresignedUpload> CreateUploadAsync(ObjectKey key, UploadConstraints constraints, CancellationToken cancellationToken)
     {
         var expiresAt = DateTimeOffset.UtcNow + constraints.Lifetime;
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = options.Bucket,
+            Key = key.Value,
+            Verb = HttpVerb.PUT,
+            Expires = expiresAt.UtcDateTime,
+            ContentType = constraints.ContentType,
+            Protocol = PresignProtocol,
+        };
+
+        // 5-13: the size the caller declared is signed into the URL, not merely recorded next to it.
+        // SigV4's canonical request covers every header named in X-Amz-SignedHeaders, and the SDK puts
+        // whatever is set here into that list - so the store recomputes the signature over the actual
+        // PUT's own Content-Length and rejects the request outright when it differs, before accepting a
+        // byte. Without this the ceiling existed only in the application that presigned: a client that
+        // declared 1 KiB and then PUT 4 GiB straight at the URL was bounded by nothing (proven, and now
+        // pinned by S3FileStorageTests' over/under-sized cases against real MinIO). The after-the-fact
+        // HEAD check (`file-storage.md` step 4) is unchanged and still runs - it can only refuse to mark
+        // an attachment ready, which is a different guarantee from refusing the write.
+        request.Headers.ContentLength = constraints.SizeBytes;
+
         var url = await ExecuteAsync(
             "presign upload",
             key,
-            () => client.GetPreSignedURLAsync(new GetPreSignedUrlRequest
-            {
-                BucketName = options.Bucket,
-                Key = key.Value,
-                Verb = HttpVerb.PUT,
-                Expires = expiresAt.UtcDateTime,
-                ContentType = constraints.ContentType,
-                Protocol = PresignProtocol,
-            }),
+            () => client.GetPreSignedURLAsync(request),
             cancellationToken);
 
         return new PresignedUpload(new Uri(url), expiresAt);

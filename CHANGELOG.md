@@ -4,6 +4,36 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.16.0] - 2026-08-25
+
+### Fixed
+
+- `Ago.Platform.Storage.S3.S3FileStorage.CreateUploadAsync` presigned a plain `PUT` carrying only a
+  content type and an expiry: the size the caller declared was captured in `UploadConstraints` and
+  then never read by the method at all (`5-13`). A limit the application checks and the storage does
+  not enforce is not a limit - a client that declared 1 KiB and then PUT straight at the presigned
+  URL was bounded by nothing, and the after-the-fact `HEAD` verification can only refuse to mark an
+  object usable, never refuse the write. The declared length is now signed into the URL
+  (`GetPreSignedUrlRequest.Headers.ContentLength`): SigV4's canonical request covers every header
+  named in `X-Amz-SignedHeaders`, so the store recomputes the signature over the real request's own
+  `Content-Length` and answers `403 SignatureDoesNotMatch` before accepting a byte. Confirmed against
+  a real MinIO container rather than assumed from AWS's documentation - MinIO honours the signed
+  header identically, and both the oversized and the undersized case are pinned by tests that PUT at
+  the URL directly, bypassing any application check (`S3FileStorageTests`). Both failed against the
+  previous code with `Expected: Forbidden, Actual: OK`.
+
+### Changed
+
+- `Ago.Platform.Abstractions.UploadConstraints.MaxSizeBytes` is renamed to `SizeBytes` and is now an
+  *exact* length rather than a ceiling (breaking, for a pre-1.0 package; every known caller
+  constructs the record positionally and passes the size it actually intends to upload, so it
+  recompiles unchanged). A presigned `PUT` has no way to express "at most N" - a `content-length-range`
+  condition exists only in a presigned *POST* policy document, which would mean every browser client
+  switching from a raw `PUT` to a multipart form `POST` for the same outcome. The rename exists so the
+  port stops promising a ceiling it never enforced and now cannot express; a caller that wants a
+  ceiling still checks it before calling, which it had to anyway - storage cannot know a product's own
+  quota.
+
 ## [0.15.0] - 2026-08-25
 
 ### Fixed
