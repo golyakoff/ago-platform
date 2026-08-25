@@ -1,4 +1,6 @@
-﻿using Ago.Platform.Abstractions;
+﻿using System.Net;
+using System.Xml.Linq;
+using Ago.Platform.Abstractions;
 using Ago.Platform.Storage.S3;
 using Microsoft.Extensions.Logging.Abstractions;
 using Polly;
@@ -100,6 +102,65 @@ public sealed class S3FileStorageTests(MinioFixture fixture)
 
         Assert.False(response.IsSuccessStatusCode);
     }
+
+    /// <summary>
+    /// `5-13`'s whole point: the refusal has to come from the *store*, not from the application that
+    /// presigned. This test therefore never calls a use case - it PUTs oversized bytes straight at the
+    /// presigned URL, exactly what a client that ignores the API can do, and asserts MinIO both
+    /// rejected the request and stored nothing. Against the pre-fix code this failed with
+    /// `Expected: Forbidden, Actual: OK` - MinIO accepted 4096 bytes against a URL presigned for 64.
+    /// </summary>
+    [Fact]
+    public async Task CreateUploadAsync_TheDeclaredSizeIsPinnedIntoTheSignature_AnOversizedPutIsRejectedByStorage()
+    {
+        var storage = CreateStorage();
+        var key = new ObjectKey($"test/{Guid.NewGuid():N}.txt");
+        const int declaredSize = 64;
+
+        var presigned = await storage.CreateUploadAsync(
+            key, new UploadConstraints("text/plain", declaredSize, TimeSpan.FromMinutes(5)), CancellationToken.None);
+
+        using var oversized = new ByteArrayContent(new byte[declaredSize * 64]);
+        oversized.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        var response = await Http.PutAsync(presigned.Url, oversized);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("SignatureDoesNotMatch", await S3ErrorCodeAsync(response));
+        Assert.Null(await storage.GetMetadataAsync(key, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// The other half of the same guarantee, and the reason the signed value is an exact length rather
+    /// than a ceiling: a short PUT is refused too. Storage cannot express "at most N" on a presigned
+    /// PUT at all (`content-length-range` is a POST-policy condition), and an exact match is the
+    /// stronger property anyway - `ConfirmAttachmentHandler` already required actual == declared.
+    /// </summary>
+    [Fact]
+    public async Task CreateUploadAsync_TheDeclaredSizeIsPinnedIntoTheSignature_AnUndersizedPutIsRejectedByStorage()
+    {
+        var storage = CreateStorage();
+        var key = new ObjectKey($"test/{Guid.NewGuid():N}.txt");
+
+        var presigned = await storage.CreateUploadAsync(
+            key, new UploadConstraints("text/plain", 64, TimeSpan.FromMinutes(5)), CancellationToken.None);
+
+        using var undersized = new ByteArrayContent("too short"u8.ToArray());
+        undersized.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        var response = await Http.PutAsync(presigned.Url, undersized);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("SignatureDoesNotMatch", await S3ErrorCodeAsync(response));
+        Assert.Null(await storage.GetMetadataAsync(key, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Asserting the S3 error code, not merely "not 2xx", is what makes the two tests above proofs of
+    /// the *mechanism*: `SignatureDoesNotMatch` can only mean the store recomputed SigV4 over the
+    /// request's real `Content-Length` and found it outside the signature - a size the store enforces
+    /// itself. A bare `IsSuccessStatusCode == false` would pass just as happily on a typo in the URL.
+    /// </summary>
+    private static async Task<string> S3ErrorCodeAsync(HttpResponseMessage response) =>
+        XDocument.Parse(await response.Content.ReadAsStringAsync()).Root?.Element("Code")?.Value ?? "(no error code)";
 
     private static async Task UploadDirectlyAsync(IFileStorage storage, ObjectKey key, byte[] body, string contentType)
     {

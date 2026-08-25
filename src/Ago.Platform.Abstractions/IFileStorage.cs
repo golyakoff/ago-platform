@@ -38,11 +38,25 @@ public readonly record struct ObjectKey(string Value)
     public override string ToString() => Value;
 }
 
-/// <summary>What the caller is asking storage to accept - a presigned PUT is scoped to exactly this
-/// content type and expires after <paramref name="Lifetime"/>; the size ceiling is enforced again
-/// after upload (`GetMetadataAsync`, `file-storage.md`'s "a client's claim is never trusted"), not
-/// something S3's presigned-PUT mechanism itself can guarantee server-side.</summary>
-public sealed record UploadConstraints(string ContentType, long MaxSizeBytes, TimeSpan Lifetime);
+/// <summary>
+/// What the caller is asking storage to accept. A presigned PUT is scoped to exactly this content
+/// type, exactly <paramref name="SizeBytes"/> bytes, and expires after <paramref name="Lifetime"/> -
+/// all three are signed into the URL, so the store itself refuses a request that does not match
+/// rather than accepting bytes an application would later have to disown.
+///
+/// **Exact, not a ceiling** (renamed from `MaxSizeBytes` in `5-13`, when the value turned out to be
+/// captured and never used): a presigned PUT has no way to express "at most N" - a range condition
+/// (`content-length-range`) exists only in a presigned *POST* policy document, which would mean every
+/// client switching from a raw PUT to a multipart form POST for the same outcome. Signing the exact
+/// length is the smaller change and the stronger property, and it costs nothing: a caller that wants
+/// a ceiling checks its own ceiling before calling (it has to anyway - the store cannot know a
+/// product's quota), and then declares the size it actually intends to upload.
+///
+/// The after-upload verification (`GetMetadataAsync`, `file-storage.md`'s "a client's claim is never
+/// trusted") is unchanged and still worth running - it is what catches a *content type* the store
+/// recorded differently, and it stays the layer that decides whether an object counts as usable.
+/// </summary>
+public sealed record UploadConstraints(string ContentType, long SizeBytes, TimeSpan Lifetime);
 
 public sealed record PresignedUpload(Uri Url, DateTimeOffset ExpiresAt);
 
