@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using Ago.Platform.Abstractions;
 using Ago.Platform.Messaging.RabbitMq;
 using Ago.Platform.Realtime;
@@ -69,6 +70,81 @@ public sealed class NodeFanoutTests(NodeFanoutFixture fixture)
         Assert.Equal(operatorConnection, receivedByB.ConnectionId);
     }
 
+    /// <summary>
+    /// `7-08`: the fan-out's span attributes, against the real registry - the seam that matters,
+    /// because the numbers are only worth anything if they are what Redis actually answered with.
+    /// The three are deliberately made to differ: two recipients, three connections (one of them has
+    /// two tabs open), two nodes. An implementation that reported the recipient count where it meant
+    /// the connection count - the easiest mistake to make here, and invisible in any test where a
+    /// recipient has exactly one connection - reports 2 for a value that is 3.
+    /// </summary>
+    [Fact]
+    public async Task AFanoutsSpan_CarriesRecipientsConnectionsAndNodes_AsResolvedFromTheRegistry()
+    {
+        var registry = CreateRegistry();
+        var nodeA = new NodeId($"node-a-{Guid.NewGuid():N}");
+        var nodeB = new NodeId($"node-b-{Guid.NewGuid():N}");
+        var visitor = new PrincipalKey($"visitor:{Guid.NewGuid()}");
+        var operatorKey = new PrincipalKey($"operator:{Guid.NewGuid()}");
+
+        // The visitor has the same conversation open in two tabs; the operator has one console.
+        await registry.RegisterAsync(new ConnectionId(Guid.NewGuid().ToString()), nodeA, visitor, CancellationToken.None);
+        await registry.RegisterAsync(new ConnectionId(Guid.NewGuid().ToString()), nodeA, visitor, CancellationToken.None);
+        await registry.RegisterAsync(new ConnectionId(Guid.NewGuid().ToString()), nodeB, operatorKey, CancellationToken.None);
+
+        await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
+        var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection), new FakeClock(DateTimeOffset.UtcNow));
+
+        // Stands in for the "{topic} process" span the consumer that calls into the fan-out is
+        // already inside (`7-01`) - the span this hop enriches rather than starting one of its own.
+        using var source = new ActivitySource($"test-{Guid.NewGuid():N}");
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = candidate => candidate == source,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        FanoutResult result;
+        using (var callerSpan = source.StartActivity("fanout-caller"))
+        {
+            Assert.NotNull(callerSpan);
+            result = await fanout.PublishAsync(
+                [visitor, operatorKey], "MessageReceived", "{\"body\":\"hi\"}", Guid.NewGuid(), CancellationToken.None);
+
+            Assert.Equal(2, callerSpan.GetTagItem("ago.fanout.recipients"));
+            Assert.Equal(3, callerSpan.GetTagItem("ago.fanout.connections"));
+            Assert.Equal(2, callerSpan.GetTagItem("ago.fanout.nodes"));
+        }
+
+        // The same facts, returned to the caller so a product can dimension them in its own
+        // vocabulary (FanoutResult's own remarks on why the platform does not tag them itself).
+        Assert.Equal(3, result.TotalConnections);
+        Assert.Equal(2, result.Recipients.Single(r => r.Recipient == visitor).Connections);
+        Assert.Equal(1, result.Recipients.Single(r => r.Recipient == operatorKey).Connections);
+    }
+
+    /// <summary>
+    /// The ordinary zero: a visitor who closed the tab. It must be reported as zero rather than
+    /// omitted, because "resolved, and had nobody" is the fact a caller needs in order to tell it
+    /// apart from "was never a recipient at all".
+    /// </summary>
+    [Fact]
+    public async Task ARecipientWithNoConnections_IsReportedAsResolvedWithZero_NotDroppedFromTheResult()
+    {
+        var registry = CreateRegistry();
+        await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
+        var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection), new FakeClock(DateTimeOffset.UtcNow));
+        var absent = new PrincipalKey($"visitor:{Guid.NewGuid()}");
+
+        var result = await fanout.PublishAsync([absent], "MessageReceived", "{}", Guid.NewGuid(), CancellationToken.None);
+
+        var recipient = Assert.Single(result.Recipients);
+        Assert.Equal(absent, recipient.Recipient);
+        Assert.Equal(0, recipient.Connections);
+        Assert.Equal(0, result.TotalConnections);
+    }
+
     [Fact]
     public async Task PublishToAPrincipalWithNoRegisteredConnections_PublishesNothing_DoesNotThrow()
     {
@@ -91,10 +167,10 @@ public sealed class NodeFanoutTests(NodeFanoutFixture fixture)
     {
         public ConcurrentBag<(ConnectionId ConnectionId, string Method, string PayloadJson)> Dispatches { get; } = [];
 
-        public Task DispatchAsync(ConnectionId connectionId, string method, string payloadJson, CancellationToken cancellationToken)
+        public Task<DispatchOutcome> DispatchAsync(ConnectionId connectionId, string method, string payloadJson, CancellationToken cancellationToken)
         {
             Dispatches.Add((connectionId, method, payloadJson));
-            return Task.CompletedTask;
+            return Task.FromResult(DispatchOutcome.Delivered);
         }
     }
 }
