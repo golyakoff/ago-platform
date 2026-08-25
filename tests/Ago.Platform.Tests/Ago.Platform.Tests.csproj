@@ -30,6 +30,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ago.Platform.Kernel\Ago.Platform.Kernel.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Hosting\Ago.Platform.Hosting.csproj" />
+    <!-- `7-09`: AddPlatformObservability and PlatformObservabilityOptions moved out of
+         Ago.Platform.Hosting into their own package (adr/0046); PlatformObservabilityTests follows
+         them rather than the OTel packages following every product host. -->
+    <ProjectReference Include="..\..\src\Ago.Platform.Observability\Ago.Platform.Observability.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Resilience\Ago.Platform.Resilience.csproj" />
     <!-- `7-08`: NodeDeliveryDispatchMetricsTests drives NodeDeliveryConsumer through a fake
          IEventConsumer - no broker, no Redis, nothing to containerise - so it belongs at this level

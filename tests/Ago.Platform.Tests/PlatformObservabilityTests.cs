@@ -1,5 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using Ago.Platform.Hosting;
+using Ago.Platform.Observability;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry;
@@ -9,11 +9,14 @@ using OpenTelemetry.Trace;
 namespace Ago.Platform.Tests;
 
 /// <summary>
-/// `7-01`'s Done-when: "Ago.Platform.Hosting's new extension has its own unit tests (resource
-/// attributes set correctly, config binding validated at startup - like every other options class
-/// in this codebase already does)". Resolves the OTel SDK's own <see cref="TracerProvider"/> to
-/// assert against - the same "test the real collaborator, not a private field" bar every other test
-/// in this project holds itself to.
+/// `7-01`'s Done-when: "the new extension has its own unit tests (resource attributes set
+/// correctly, config binding validated at startup - like every other options class in this codebase
+/// already does)". Resolves the OTel SDK's own <see cref="TracerProvider"/> to assert against - the
+/// same "test the real collaborator, not a private field" bar every other test in this project holds
+/// itself to. `7-09` moved the subject under test from <c>Ago.Platform.Hosting</c> to
+/// <c>Ago.Platform.Observability</c>; the service-name literals below say <c>Ago.Product.*</c> rather
+/// than naming a real product's hosts, since the platform has no business knowing either product's
+/// host names (adr/0046's documentation half).
 /// </summary>
 public class PlatformObservabilityTests
 {
@@ -28,14 +31,14 @@ public class PlatformObservabilityTests
         });
 
         var services = new ServiceCollection();
-        services.AddPlatformObservability(configuration, "Ago.Chat.Api");
+        services.AddPlatformObservability(configuration, "Ago.Product.Api");
         using var provider = services.BuildServiceProvider();
 
         var tracerProvider = provider.GetRequiredService<TracerProvider>();
         var resource = tracerProvider.GetResource();
         var attributes = resource.Attributes.ToDictionary(a => a.Key, a => a.Value);
 
-        Assert.Equal("Ago.Chat.Api", attributes["service.name"]);
+        Assert.Equal("Ago.Product.Api", attributes["service.name"]);
         Assert.Equal("1.2.3", attributes["service.version"]);
         Assert.Equal("test", attributes["deployment.environment"]);
     }
@@ -49,7 +52,7 @@ public class PlatformObservabilityTests
         });
 
         var services = new ServiceCollection();
-        services.AddPlatformObservability(configuration, "Ago.Chat.Worker");
+        services.AddPlatformObservability(configuration, "Ago.Product.Worker");
         using var provider = services.BuildServiceProvider();
 
         var attributes = provider.GetRequiredService<TracerProvider>().GetResource().Attributes.ToDictionary(a => a.Key, a => a.Value);
@@ -77,13 +80,13 @@ public class PlatformObservabilityTests
         });
 
         var services = new ServiceCollection();
-        services.AddPlatformObservability(configuration, "Ago.Chat.Api");
+        services.AddPlatformObservability(configuration, "Ago.Product.Api");
         using var provider = services.BuildServiceProvider();
 
         var meterProvider = provider.GetRequiredService<MeterProvider>();
         var attributes = meterProvider.GetResource().Attributes.ToDictionary(a => a.Key, a => a.Value);
 
-        Assert.Equal("Ago.Chat.Api", attributes["service.name"]);
+        Assert.Equal("Ago.Product.Api", attributes["service.name"]);
         Assert.Equal("1.2.3", attributes["service.version"]);
         Assert.Equal("test", attributes["deployment.environment"]);
     }
@@ -98,7 +101,7 @@ public class PlatformObservabilityTests
         var configuration = BuildConfiguration(new Dictionary<string, string?>());
 
         var services = new ServiceCollection();
-        Assert.Throws<ValidationException>(() => services.AddPlatformObservability(configuration, "Ago.Chat.Api"));
+        Assert.Throws<ValidationException>(() => services.AddPlatformObservability(configuration, "Ago.Product.Api"));
     }
 
     [Fact]
@@ -114,7 +117,7 @@ public class PlatformObservabilityTests
         });
 
         var services = new ServiceCollection();
-        services.AddPlatformObservability(configuration, "Ago.Chat.Api");
+        services.AddPlatformObservability(configuration, "Ago.Product.Api");
         using var provider = services.BuildServiceProvider();
 
         var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<PlatformObservabilityOptions>>().Value;

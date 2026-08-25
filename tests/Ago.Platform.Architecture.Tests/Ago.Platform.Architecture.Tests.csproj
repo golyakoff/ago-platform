@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\Ago.Platform.Abstractions\Ago.Platform.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Persistence.Postgres\Ago.Platform.Persistence.Postgres.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Messaging.RabbitMq\Ago.Platform.Messaging.RabbitMq.csproj" />
+    <ProjectReference Include="..\..\src\Ago.Platform.Observability\Ago.Platform.Observability.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Realtime\Ago.Platform.Realtime.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Resilience\Ago.Platform.Resilience.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Caching.Redis\Ago.Platform.Caching.Redis.csproj" />

@@ -25,8 +25,9 @@ internal static class RabbitMqTracing
     /// This adapter's own `ActivitySource`, generic on purpose (`Ago.Platform.Messaging.RabbitMq`,
     /// not a product name) - it wraps *every* consumer's handler invocation, for every product this
     /// platform ever hosts, which is exactly why the span it starts is named after the topic being
-    /// consumed rather than anything chat-specific. `Ago.Platform.Hosting.AddPlatformObservability`
-    /// picks it up through the "Ago.*" wildcard, never by this literal name.
+    /// consumed rather than anything chat-specific.
+    /// `Ago.Platform.Observability.AddPlatformObservability` picks it up through the "Ago.*"
+    /// wildcard, never by this literal name.
     /// </summary>
     internal static readonly ActivitySource Source = new("Ago.Platform.Messaging.RabbitMq");
 

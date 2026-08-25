@@ -5,6 +5,7 @@
     <Project Path="src/Ago.Platform.Hosting/Ago.Platform.Hosting.csproj" />
     <Project Path="src/Ago.Platform.Kernel/Ago.Platform.Kernel.csproj" />
     <Project Path="src/Ago.Platform.Messaging.RabbitMq/Ago.Platform.Messaging.RabbitMq.csproj" />
+    <Project Path="src/Ago.Platform.Observability/Ago.Platform.Observability.csproj" />
     <Project Path="src/Ago.Platform.Persistence.Postgres/Ago.Platform.Persistence.Postgres.csproj" />
     <Project Path="src/Ago.Platform.Realtime/Ago.Platform.Realtime.csproj" />
     <Project Path="src/Ago.Platform.Resilience/Ago.Platform.Resilience.csproj" />

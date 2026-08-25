@@ -4,6 +4,66 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.18.0] - 2026-08-25
+
+### Changed
+
+- **Breaking, source-breaking for every host that wires telemetry.** `AddPlatformObservability`,
+  `PlatformObservabilityOptions`, `OtelExporterOptions`, `ActivitySourceWildcard` and `MeterWildcard`
+  move out of `Ago.Platform.Hosting` into a **new package, `Ago.Platform.Observability`** (`7-09`,
+  `adr/0046`). The extension method's class is renamed `ServiceCollectionExtensions` ->
+  `ObservabilityServiceCollectionExtensions`, because `Ago.Platform.Hosting` keeps a class by the
+  former name and a host referencing both packages would otherwise hit `CS0433` on every call site.
+  Nothing about the method's behaviour, signature, configuration keys (`Otel:*`) or wildcard values
+  changed - only where it ships from.
+
+  **What a consuming host must do:** add `<PackageReference Include="Ago.Platform.Observability" />`
+  alongside the existing `Ago.Platform.Hosting` one, and add `using Ago.Platform.Observability;` to
+  any file that calls `AddPlatformObservability` or names either wildcard constant. A host that does
+  neither fails to compile; there is no silent-behaviour-change failure mode here. A host that never
+  wired telemetry in the first place changes nothing at all and simply stops resolving the packages
+  below.
+
+- **`Ago.Platform.Hosting`'s declared dependencies drop from ten `PackageReference`s to two**
+  (`Microsoft.Extensions.Configuration.Abstractions`, `Microsoft.Extensions.DependencyInjection.Abstractions`),
+  and its packed `.nuspec` from **16 dependencies to 3**. Gone: the five OpenTelemetry packages and
+  the three `Microsoft.Extensions.Options*` packages that existed only for the observability options
+  class. The `NU5104` suppression goes with them, onto
+  `Ago.Platform.Observability` where the prerelease `OpenTelemetry.Exporter.Prometheus.AspNetCore`
+  dependency now lives.
+
+  This is the point of the change, measured rather than asserted. A `Microsoft.NET.Sdk.Worker`
+  generic host whose `Program.cs` calls only `AddPlatformKernel()` resolved **39 packages, 8 of them
+  OpenTelemetry** (including `OpenTelemetry.Exporter.Prometheus.AspNetCore/1.18.0-beta.1`, which has
+  never shipped a stable release) against `0.17.0`, and resolves **30 packages, 0 of them
+  OpenTelemetry** against `0.18.0`. Isolating the platform package's own cost - a bare
+  `Microsoft.NET.Sdk` project referencing nothing but `Ago.Platform.Hosting` - the same pair reads
+  **26 packages -> 5**. Both read out of `project.assets.json` after a clean restore, not inferred.
+  The generic host could not have used any of the eight: `AddPlatformObservability` calls
+  `AddAspNetCoreInstrumentation()` and `AddPrometheusExporter()`, and a scrape endpoint needs an
+  `IEndpointRouteBuilder` a generic host does not have. `Ago.Platform.Hosting` is the one package
+  every product host of every shape must reference in order to exist at all - it holds
+  `IProductModule` - so one product's dependency had become every product's requirement.
+
+### Added
+
+- `Ago.Platform.Observability` package: `AddPlatformObservability`, its options, and the two
+  `"Ago.*"` wildcard constants. Hosts that serve HTTP reference it; generic hosts do not.
+- `Ago.Platform.Architecture.Tests.HostingPackagingTests` (`7-09`): asserts `Ago.Platform.Hosting`'s
+  `PackageReference` set is exactly the two-package allowlist, that it carries no OpenTelemetry
+  dependency, and that `Ago.Platform.Observability` is the only packable project that does. The
+  assertion is against the project files, not the compiled assemblies, because the harm is in the
+  packed `.nuspec`'s dependency list - which is written from `PackageReference` whether or not any
+  type from the package is used in IL. Proven to fail by adding an OpenTelemetry `PackageReference`
+  back to `Ago.Platform.Hosting` and reverting it.
+
+### Fixed
+
+- `IProductModule`'s and `AddPlatformObservability`'s XML docs named `Ago.Chat.Api`/`Worker`/
+  `Webhooks` as though those were *the* hosts. With a second product, that is simply false - the same
+  mistake in prose that the packaging made in metadata. Both now describe host *shapes*, name no
+  product, and `AddPlatformObservability` states plainly that it requires a web host and why.
+
 ## [0.17.0] - 2026-08-25
 
 `0.16.0` is deliberately skipped here: it is claimed by `5-13`, whose branch was already pushed and

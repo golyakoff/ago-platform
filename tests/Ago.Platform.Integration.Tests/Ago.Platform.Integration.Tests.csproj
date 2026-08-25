@@ -33,6 +33,9 @@
     <ProjectReference Include="..\..\src\Ago.Platform.Kernel\Ago.Platform.Kernel.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Persistence.Postgres\Ago.Platform.Persistence.Postgres.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Messaging.RabbitMq\Ago.Platform.Messaging.RabbitMq.csproj" />
+    <!-- `7-09`: MeterWildcard moved to Ago.Platform.Observability with the rest of the telemetry
+         wiring - RabbitMqRetryAndDeadLetterTests subscribes with the same wildcard a real host does. -->
+    <ProjectReference Include="..\..\src\Ago.Platform.Observability\Ago.Platform.Observability.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Realtime\Ago.Platform.Realtime.csproj" />
     <ProjectReference Include="..\..\src\Ago.Platform.Storage.S3\Ago.Platform.Storage.S3.csproj" />
   </ItemGroup>

@@ -97,7 +97,7 @@ public sealed class RabbitMqRetryAndDeadLetterTests(RabbitMqFixture fixture)
     {
         var exportedMetrics = new List<Metric>();
         using var meterProvider = Sdk.CreateMeterProviderBuilder()
-            .AddMeter(Ago.Platform.Hosting.ServiceCollectionExtensions.MeterWildcard)
+            .AddMeter(Ago.Platform.Observability.ObservabilityServiceCollectionExtensions.MeterWildcard)
             .AddInMemoryExporter(exportedMetrics)
             .Build();
 

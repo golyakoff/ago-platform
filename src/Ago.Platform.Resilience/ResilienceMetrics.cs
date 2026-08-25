@@ -12,13 +12,15 @@ namespace Ago.Platform.Resilience;
 /// webhook dispatcher) - the same "add the instrument to the shared builder, not a new pipeline per
 /// caller" placement this item's backlog names explicitly for this package.
 ///
-/// A plain dependency-free static holder, the metrics twin of how <c>Ago.Chat.Contracts.ChatTracing</c>
-/// holds one shared <c>ActivitySource</c> - public for the same reason that class is: the instrument
+/// A plain dependency-free static holder, the metrics twin of how a product's own tracing holder
+/// keeps one shared <c>ActivitySource</c> - public for the same reason those are: the instrument
 /// names below are the reviewer-facing contract `7-03`'s Grafana panels are built against, not a
 /// private implementation detail. Every named pipeline built anywhere in this codebase reports
 /// through this one <see cref="Meter"/>, so `7-01`'s "Ago.*" wildcard subscription
-/// (<c>Ago.Platform.Hosting.ServiceCollectionExtensions.MeterWildcard</c>) picks it up without this
-/// project needing to know that subscription exists.
+/// (<c>Ago.Platform.Observability.ObservabilityServiceCollectionExtensions.MeterWildcard</c>) picks
+/// it up without this project needing to know that subscription exists - and, since the instrument
+/// is a BCL <see cref="Meter"/>, without this project referencing the OpenTelemetry SDK at all
+/// (`7-09`/adr/0046).
 /// </summary>
 public static class ResilienceMetrics
 {
