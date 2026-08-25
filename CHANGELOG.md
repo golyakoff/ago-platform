@@ -4,6 +4,35 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.15.0] - 2026-08-25
+
+### Fixed
+
+- `Ago.Platform.Realtime.RealtimeMetrics`' connections gauge (`ago.platform.realtime.connections`)
+  reported how many times `IConnectionRegistry.RegisterAsync` had been called, not how many
+  connections a node held (`7-07`). That pairing - increment in `RegisterAsync`, decrement in
+  `UnregisterAsync` - would have been correct if `RegisterAsync` were only called on connect, but it
+  is also the heartbeat's TTL refresh by design (`ConnectionHeartbeat` re-registers every tracked
+  connection every 10s, and the port's own contract says the two are deliberately the same
+  operation). Thirteen connections on an idle deployment therefore added ~78 to the gauge per minute
+  against a handful of real disconnects: measured live at 564 climbing to 2476 over thirty minutes
+  with nobody connected, while Redis held 13 entries. The gauge now *reads the set it describes* -
+  `LocalConnectionTracker.Count` at collection time - instead of maintaining a second number
+  alongside the calls that maintain the first, which removes the class of drift rather than one
+  instance of it. Same shape `ResilienceMetrics`' breaker-state gauge already uses (register a live
+  handle, read it in the callback). No consumer of the metric changes; a host that calls
+  `AddConnectionRegistry` picks the fix up with no code change of its own.
+
+### Added
+
+- `Ago.Platform.Realtime.RealtimeMetrics.TrackNode(NodeId, LocalConnectionTracker)`: names the
+  tracker that answers the connections gauge for a node. `AddConnectionRegistry` calls it when it
+  builds the tracker - the composition root is the only place that knows both facts - and it is
+  public so a host or test composing the realtime pieces by hand can still say which tracker
+  describes which node.
+- `Ago.Platform.Realtime.LocalConnectionTracker.Count`: the number of connections this node holds,
+  without `Snapshot()`'s whole-dictionary copy.
+
 ## [0.14.0] - 2026-08-24
 
 ### Added
