@@ -71,8 +71,8 @@
          this pin, not an assumption). Ago.Platform.Caching.Redis and Ago.Platform.Storage.S3 still
          reference Polly.Core directly too, for the ResiliencePipeline type their adapters hold - only
          ResiliencePipelineBuilder construction moves behind this package (arch-tested). -->
-    <PackageVersion Include="Polly.Core" Version="8.5.2" />
-    <PackageVersion Include="Polly.RateLimiting" Version="8.5.2" />
+    <PackageVersion Include="Polly.Core" Version="8.7.0" />
+    <PackageVersion Include="Polly.RateLimiting" Version="8.7.0" />
   </ItemGroup>
 
   <ItemGroup Label="Storage">
