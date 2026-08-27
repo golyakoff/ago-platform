@@ -79,7 +79,7 @@
     <!-- 5-02: MinIO is S3-API-compatible, so the official AWS SDK is the client, pointed at a
          custom ServiceURL - no MinIO-specific SDK, exactly the "the API is the same, so the
          deployment target stops being an architectural question" reasoning file-storage.md states. -->
-    <PackageVersion Include="AWSSDK.S3" Version="4.0.102.3" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.102.4" />
     <PackageVersion Include="Testcontainers.Minio" Version="4.14.0" />
   </ItemGroup>
 
