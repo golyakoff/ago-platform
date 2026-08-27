@@ -1,0 +1,29 @@
+# 17-04: keeps this repository's own two dependency surfaces from going stale silently.
+#
+# Schedule: weekly, Monday 06:00 UTC - the same day and hour `ago-chat`'s own
+# `credential-expiry.yml` already uses, so the project has one weekly cadence for its automated
+# checks rather than a different one per repository. Daily would be more churn than a project this
+# size can review; monthly would let a real advisory sit for weeks before a PR even exists.
+#
+# No Docker entry here: this repository ships no Dockerfile and no Kubernetes manifest - it produces
+# NuGet packages only (repositories.md), consumed by ago-chat and ago-calendar's own images.
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+
+  # An unpinned or stale Action is a supply-chain surface as real as a package (ci.yml uses
+  # actions/checkout, actions/setup-dotnet, actions/upload-artifact, all pinned to a major version
+  # tag rather than a commit SHA today) - this keeps them current without a human going to look.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
