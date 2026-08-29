@@ -73,7 +73,7 @@ jobs:
 
       - name: Publish test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: TestResults
@@ -116,7 +116,7 @@ jobs:
       # Kept alongside the registry push below: lets a reviewer without package-read access grab
       # the .nupkg straight from the Actions run, no credential needed.
       - name: Upload packages
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: nupkgs-${{ steps.version.outputs.version }}
           path: nupkgs/*.nupkg
