@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 
 namespace Ago.Platform.Messaging.RabbitMq;
@@ -9,7 +10,7 @@ namespace Ago.Platform.Messaging.RabbitMq;
 /// cleanly when the broker comes back, matching resilience.md's "outbox accumulates while it is
 /// down" - this class is what makes "while it is down" survivable rather than fatal.
 /// </summary>
-public sealed class RabbitMqConnection(IOptions<RabbitMqOptions> options) : IAsyncDisposable
+public sealed class RabbitMqConnection(IOptions<RabbitMqOptions> options, ILogger<RabbitMqConnection> logger) : IAsyncDisposable
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
     private IConnection? _connection;
@@ -67,11 +68,31 @@ public sealed class RabbitMqConnection(IOptions<RabbitMqOptions> options) : IAsy
 
     public async ValueTask DisposeAsync()
     {
-        if (_connection is not null)
+        try
         {
-            await _connection.DisposeAsync();
+            if (_connection is not null)
+            {
+                await _connection.DisposeAsync();
+            }
         }
-
-        _lock.Dispose();
+        catch (Exception ex)
+        {
+            // Best-effort: disposal must never throw, whatever the broker is doing (17-09). The
+            // client's own DisposeAsync already prefers a forced close over a negotiated one while
+            // the connection is still open - RabbitMQ.Client's Connection.DisposeAsync calls its own
+            // AbortAsync in that case, bounded to a 5s internal timeout - but a broker that never
+            // answers even that forced-close handshake (paused, network-partitioned - never sends a
+            // TCP FIN/RST, the exact "silently-dead connection" shape RequestedHeartbeat above exists
+            // to catch) still lets a TaskCanceledException escape, because the client only swallows
+            // OperationInterruptedException internally, not a timeout. Catching broadly here is what
+            // lets a stopping host finish shutting down regardless of what the broker is doing;
+            // logging rather than discarding silently is what leaves an operator debugging a wedged
+            // shutdown something to find, instead of a shutdown that failed for reasons no log carries.
+            logger.LogWarning(ex, "RabbitMQ connection did not close cleanly during dispose.");
+        }
+        finally
+        {
+            _lock.Dispose();
+        }
     }
 }

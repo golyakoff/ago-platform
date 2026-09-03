@@ -35,8 +35,8 @@ public sealed class NodeFanoutTests(NodeFanoutFixture fixture)
 
         var dispatcherA = new FakeLocalConnectionDispatcher();
         var dispatcherB = new FakeLocalConnectionDispatcher();
-        await using var consumerConnectionA = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
-        await using var consumerConnectionB = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
+        await using var consumerConnectionA = new RabbitMqConnection(fixture.CreateRabbitMqOptions(), NullLogger<RabbitMqConnection>.Instance);
+        await using var consumerConnectionB = new RabbitMqConnection(fixture.CreateRabbitMqOptions(), NullLogger<RabbitMqConnection>.Instance);
         var consumerA = new NodeDeliveryConsumer(new RabbitMqEventConsumer(consumerConnectionA), dispatcherA, nodeA, NullLogger<NodeDeliveryConsumer>.Instance);
         var consumerB = new NodeDeliveryConsumer(new RabbitMqEventConsumer(consumerConnectionB), dispatcherB, nodeB, NullLogger<NodeDeliveryConsumer>.Instance);
         await consumerA.StartAsync(CancellationToken.None);
@@ -48,8 +48,8 @@ public sealed class NodeFanoutTests(NodeFanoutFixture fixture)
 
         try
         {
-            await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
-            var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection), new FakeClock(DateTimeOffset.UtcNow));
+            await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions(), NullLogger<RabbitMqConnection>.Instance);
+            var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection, NullLogger<RabbitMqEventPublisher>.Instance), new FakeClock(DateTimeOffset.UtcNow));
 
             await fanout.PublishAsync(
                 [visitor, operatorKey], "MessageReceived", "{\"body\":\"hi\"}", Guid.NewGuid(), CancellationToken.None);
@@ -92,8 +92,8 @@ public sealed class NodeFanoutTests(NodeFanoutFixture fixture)
         await registry.RegisterAsync(new ConnectionId(Guid.NewGuid().ToString()), nodeA, visitor, CancellationToken.None);
         await registry.RegisterAsync(new ConnectionId(Guid.NewGuid().ToString()), nodeB, operatorKey, CancellationToken.None);
 
-        await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
-        var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection), new FakeClock(DateTimeOffset.UtcNow));
+        await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection, NullLogger<RabbitMqEventPublisher>.Instance), new FakeClock(DateTimeOffset.UtcNow));
 
         // Stands in for the "{topic} process" span the consumer that calls into the fan-out is
         // already inside (`7-01`) - the span this hop enriches rather than starting one of its own.
@@ -133,8 +133,8 @@ public sealed class NodeFanoutTests(NodeFanoutFixture fixture)
     public async Task ARecipientWithNoConnections_IsReportedAsResolvedWithZero_NotDroppedFromTheResult()
     {
         var registry = CreateRegistry();
-        await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
-        var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection), new FakeClock(DateTimeOffset.UtcNow));
+        await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection, NullLogger<RabbitMqEventPublisher>.Instance), new FakeClock(DateTimeOffset.UtcNow));
         var absent = new PrincipalKey($"visitor:{Guid.NewGuid()}");
 
         var result = await fanout.PublishAsync([absent], "MessageReceived", "{}", Guid.NewGuid(), CancellationToken.None);
@@ -149,8 +149,8 @@ public sealed class NodeFanoutTests(NodeFanoutFixture fixture)
     public async Task PublishToAPrincipalWithNoRegisteredConnections_PublishesNothing_DoesNotThrow()
     {
         var registry = CreateRegistry();
-        await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
-        var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection), new FakeClock(DateTimeOffset.UtcNow));
+        await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var fanout = new NodeFanoutPublisher(registry, new RabbitMqEventPublisher(publisherConnection, NullLogger<RabbitMqEventPublisher>.Instance), new FakeClock(DateTimeOffset.UtcNow));
 
         var principalWithNoConnections = new PrincipalKey($"visitor:{Guid.NewGuid()}");
 

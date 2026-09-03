@@ -4,6 +4,40 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.19.0] - 2026-09-03
+
+### Fixed
+
+- **`Ago.Platform.Messaging.RabbitMq.RabbitMqConnection.DisposeAsync` could throw, and leaked its
+  lock when it did (`17-09`).** Found by CI on an unrelated, doc-only `ago-chat` PR:
+  `RabbitMqConnectionDisposeTests` (`KillingTheConsumerMidBatch`-shaped - a competing consumer with
+  deliveries genuinely in flight, not an idle connection) proves both halves against a real broker
+  paused mid-dispose, not by reading the code - a plain idle-connection pause was tried first and did
+  not reproduce it; the escape only shows up once the client's `DisposeAsync` also has in-flight
+  consumer dispatch work to reconcile while the AMQP close handshake is going nowhere. Fixed by
+  catching broadly around the client's own `DisposeAsync` and logging a warning rather than
+  discarding the failure silently (`resilience.md` update below), and moving `_lock.Dispose()` into a
+  `finally` so it always runs, including on the throwing path. `RabbitMqEventPublisher.DisposeAsync`
+  had the identical six-line shape around its own `_channel.DisposeAsync()` call and gets the same
+  fix here, on the same reasoning (not independently reproduced against a real broker the way the
+  connection case was - the code shape and the underlying client's own documented disposal timeouts
+  are the basis for it, not a repeated Testcontainers proof).
+
+### Changed
+
+- **Source-breaking for any direct instantiation.** `RabbitMqConnection` and `RabbitMqEventPublisher`
+  now take a required `ILogger<T>` constructor parameter (`17-09`), matching every other
+  `Infrastructure.*` adapter that already does this (`RedisDistributedLock`, `RedisCache`, `S3FileStorage`,
+  ...) rather than a nullable/optional one that would be the only exception to that pattern in this
+  codebase. Both types are resolved through DI in every known host (`AddRabbitMqMessaging`), which
+  picks up the new dependency automatically wherever logging is already configured - no host-side
+  change. Only direct `new RabbitMqConnection(...)`/`new RabbitMqEventPublisher(...)` call sites (this
+  repository's own integration tests) needed updating, to pass `NullLogger<T>.Instance`.
+  `Ago.Platform.Messaging.RabbitMq` gains a `Microsoft.Extensions.Logging.Abstractions`
+  `PackageReference` for this - already a dependency of `Ago.Platform.Caching.Redis` elsewhere in this
+  solution, not a new package to the ecosystem, and the minimal DI logging abstraction rather than a
+  hand-rolled reporting mechanism this module would otherwise need to invent on its own.
+
 ## [0.18.0] - 2026-08-25
 
 ### Changed

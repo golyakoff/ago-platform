@@ -2,6 +2,7 @@
 using System.Text;
 using Ago.Platform.Abstractions;
 using Ago.Platform.Messaging.RabbitMq;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using RabbitMQ.Client;
@@ -20,8 +21,8 @@ public sealed class RabbitMqRetryAndDeadLetterTests(RabbitMqFixture fixture)
     {
         var topic = RabbitMqTestHelpers.NewTopic();
         var retryPolicy = new RetryPolicy(MaxAttempts: 5, InitialBackoff: TimeSpan.FromMilliseconds(100), DeadLetterName: $"dlq.{Guid.NewGuid():N}");
-        await using var connection = new RabbitMqConnection(fixture.CreateOptions());
-        var publisher = new RabbitMqEventPublisher(connection);
+        await using var connection = new RabbitMqConnection(fixture.CreateOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var publisher = new RabbitMqEventPublisher(connection, NullLogger<RabbitMqEventPublisher>.Instance);
         var consumer = new RabbitMqEventConsumer(connection);
 
         var attempts = new ConcurrentBag<Guid>();
@@ -52,8 +53,8 @@ public sealed class RabbitMqRetryAndDeadLetterTests(RabbitMqFixture fixture)
         var topic = RabbitMqTestHelpers.NewTopic();
         var deadLetterName = $"dlq.{Guid.NewGuid():N}";
         var retryPolicy = new RetryPolicy(MaxAttempts: 2, InitialBackoff: TimeSpan.FromMilliseconds(100), DeadLetterName: deadLetterName);
-        await using var connection = new RabbitMqConnection(fixture.CreateOptions());
-        var publisher = new RabbitMqEventPublisher(connection);
+        await using var connection = new RabbitMqConnection(fixture.CreateOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var publisher = new RabbitMqEventPublisher(connection, NullLogger<RabbitMqEventPublisher>.Instance);
         var consumer = new RabbitMqEventConsumer(connection);
 
         await consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "poison-consumer", retryPolicy, async (_, ctx, ct) =>
@@ -105,8 +106,8 @@ public sealed class RabbitMqRetryAndDeadLetterTests(RabbitMqFixture fixture)
         var consumerName = $"metrics-consumer-{Guid.NewGuid():N}";
         var deadLetterName = $"dlq.{Guid.NewGuid():N}";
         var retryPolicy = new RetryPolicy(MaxAttempts: 2, InitialBackoff: TimeSpan.FromMilliseconds(100), DeadLetterName: deadLetterName);
-        await using var connection = new RabbitMqConnection(fixture.CreateOptions());
-        var publisher = new RabbitMqEventPublisher(connection);
+        await using var connection = new RabbitMqConnection(fixture.CreateOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var publisher = new RabbitMqEventPublisher(connection, NullLogger<RabbitMqEventPublisher>.Instance);
         var consumer = new RabbitMqEventConsumer(connection);
 
         // Throws rather than calling ctx.NackAsync(requeue: true) directly, deliberately: the
