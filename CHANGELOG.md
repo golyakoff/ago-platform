@@ -31,8 +31,18 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
   ...) rather than a nullable/optional one that would be the only exception to that pattern in this
   codebase. Both types are resolved through DI in every known host (`AddRabbitMqMessaging`), which
   picks up the new dependency automatically wherever logging is already configured - no host-side
-  change. Only direct `new RabbitMqConnection(...)`/`new RabbitMqEventPublisher(...)` call sites (this
-  repository's own integration tests) needed updating, to pass `NullLogger<T>.Instance`.
+  change. Direct `new RabbitMqConnection(...)`/`new RabbitMqEventPublisher(...)` call sites need
+  updating to pass `NullLogger<T>.Instance`.
+
+  **Corrected `17-10`, after this shipped**: the sentence here originally said those call sites were
+  "this repository's own integration tests", which was wrong and understated the cost. `ago-chat`'s
+  own suites construct both types directly too - **38 call sites across 17 files** in
+  `Ago.Chat.Integration.Tests` and `Ago.Chat.Concurrency.Tests`, none of which go through
+  `AddRabbitMqMessaging`. So moving a consumer to `0.19.0` is not a one-line pin bump; the build fails
+  with 41 `CS7036` errors until they are fixed. The DI claim above is still true and is what caused the
+  mistake - no *host* changed, and reasoning about hosts is not the same as reasoning about every
+  compiler-visible construction. A source-breaking change to a type consumers instantiate has to be
+  measured in the consumers, not in the package.
   `Ago.Platform.Messaging.RabbitMq` gains a `Microsoft.Extensions.Logging.Abstractions`
   `PackageReference` for this - already a dependency of `Ago.Platform.Caching.Redis` elsewhere in this
   solution, not a new package to the ecosystem, and the minimal DI logging abstraction rather than a
