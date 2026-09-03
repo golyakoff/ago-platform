@@ -14,13 +14,20 @@ namespace Ago.Platform.Realtime;
 ///
 /// <see cref="SubscriptionMode.Competing"/>, not <see cref="SubscriptionMode.Broadcast"/>, even
 /// though exactly one process ever subscribes to a given node's topic: <c>RabbitMqEventConsumer</c>
-/// names <see cref="SubscriptionMode.Competing"/>'s queue after the topic itself (stable, durable),
-/// while <see cref="SubscriptionMode.Broadcast"/> gives every subscription attempt a fresh
-/// random-suffixed queue *and* a durable, never-auto-deleted retry queue to match - on this node's
-/// own dedicated topic, restarting with <see cref="SubscriptionMode.Broadcast"/> would leak one such
-/// retry queue per restart. <see cref="SubscriptionMode.Competing"/>'s stable name leaks at most once
-/// per node *replacement* (a new pod identity, not just a reconnect) - accepted, not solved, here;
-/// nothing in this project has a queue-retention policy yet.
+/// names <see cref="SubscriptionMode.Competing"/>'s queue after the topic itself (stable), while
+/// <see cref="SubscriptionMode.Broadcast"/> gives every subscription attempt a fresh random-suffixed
+/// queue - on this node's own dedicated topic, a fresh name every restart would mean a fresh queue to
+/// bind every restart, which is worse than the stable name this needs regardless of lifetime.
+///
+/// `15-15`: <see cref="QueueLifetime.ProcessScoped"/>, not the `Durable` every other `Competing`
+/// subscription in this system needs. A node's own topic (<see cref="NodeTopics.For"/>) is unique per
+/// pod and nothing will ever reattach to `deliver-to-connections.&lt;that pod&gt;` once the pod is
+/// gone - measured on the live broker as 71 of 72 such queues belonging to pods that no longer
+/// existed, a running total of every restart the cluster had ever had, each still bound to the fanout
+/// exchange and routed into on every publish. `Durable` was the only shape available before this item
+/// and was never a decision, only what the platform's only `Competing` primitive happened to do -
+/// `ProcessScoped` is what "deliver to the node holding this connection" actually means: once this
+/// node's own process is gone, so is everyone who could ever have used this queue.
 ///
 /// Every delivery is acknowledged regardless of per-connection outcome:
 /// <see cref="ILocalConnectionDispatcher"/> already treats an unreachable connection as a no-op
@@ -51,12 +58,24 @@ public sealed class NodeDeliveryConsumer(
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var topic = NodeTopics.For(currentNode);
-        var retryPolicy = new RetryPolicy(MaxAttempts: 1, InitialBackoff: TimeSpan.Zero, DeadLetterName: $"{topic}.dlq");
+
+        // `15-15`: shared across every node rather than `$"{topic}.dlq"` (per-pod, as this used to
+        // read) - the DLQ itself stays durable regardless of QueueLifetime (RabbitMqEventConsumer's
+        // own remarks), so a per-node name would still have accumulated one durable, empty, never-
+        // cleaned queue per pod, the identical orphan this item measured just one queue over. A single
+        // stable name that every node's subscription declares identically is safe precisely because
+        // this handler never actually dead-letters into it (below: MaxAttempts: 1, and the catch block
+        // acks rather than lets a failure reach a retry/DLQ decision) - if that ever changes, this name
+        // stops being able to stay generic across nodes and needs its own design.
+        var retryPolicy = new RetryPolicy(MaxAttempts: 1, InitialBackoff: TimeSpan.Zero, DeadLetterName: "deliver-to-connections.dlq");
 
         // `5-11`: a stable name, even though nothing else subscribes to this node's own topic today -
         // correct by construction rather than by the accident of being the only subscriber, the same
-        // discipline this fix asks of every other Competing subscription.
-        return consumer.SubscribeAsync(topic, SubscriptionMode.Competing, "node-delivery", retryPolicy, HandleAsync, stoppingToken);
+        // discipline this fix asks of every other Competing subscription. `15-15`: ProcessScoped,
+        // because "node-delivery" on *this* topic is precisely the consumer name this item's own
+        // QueueLifetime doc comment describes - one with no life beyond this process.
+        return consumer.SubscribeAsync(
+            topic, SubscriptionMode.Competing, "node-delivery", retryPolicy, QueueLifetime.ProcessScoped, HandleAsync, stoppingToken);
     }
 
     private async Task HandleAsync(EventEnvelope envelope, IMessageContext context, CancellationToken cancellationToken)

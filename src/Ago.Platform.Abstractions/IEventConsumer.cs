@@ -17,11 +17,39 @@
 /// </summary>
 public interface IEventConsumer
 {
+    /// <summary>
+    /// Durable-queue overload, unchanged since `5-11`. Every existing caller keeps compiling and
+    /// keeps today's behaviour without edit - a `Competing` subscription's queue survives every
+    /// consumer disconnecting, which is what almost every subscription in this system actually wants
+    /// (`messaging.md`'s whole topic table). Equivalent to calling the <see cref="QueueLifetime"/>
+    /// overload below with <see cref="QueueLifetime.Durable"/>.
+    /// </summary>
     Task SubscribeAsync(
         string topic,
         SubscriptionMode mode,
         string consumerName,
         RetryPolicy retryPolicy,
+        Func<EventEnvelope, IMessageContext, CancellationToken, Task> handler,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// `15-15`: the overload a caller reaches for only when its consumer name already names something
+    /// with no life beyond one process (a pod, a connection) - see <see cref="QueueLifetime"/>'s own
+    /// remarks for why this is a separate, explicit parameter rather than inferred from the name
+    /// string or swept up after the fact. A second interface member instead of a default parameter on
+    /// the one above, specifically so every existing call site - in this repository and in `ago-chat`
+    /// - keeps compiling unedited: an <see cref="Ago.Platform.Abstractions.RetryPolicy"/>-shaped
+    /// optional parameter cannot sit before the required, always-explicit
+    /// <paramref name="cancellationToken"/> without either reordering it (rewriting every call site)
+    /// or making the token itself optional (which this codebase never does - a token is always passed
+    /// explicitly).
+    /// </summary>
+    Task SubscribeAsync(
+        string topic,
+        SubscriptionMode mode,
+        string consumerName,
+        RetryPolicy retryPolicy,
+        QueueLifetime queueLifetime,
         Func<EventEnvelope, IMessageContext, CancellationToken, Task> handler,
         CancellationToken cancellationToken);
 }

@@ -25,11 +25,21 @@ namespace Ago.Platform.Messaging.RabbitMq;
 /// </summary>
 public sealed class RabbitMqEventConsumer(RabbitMqConnection connection) : IEventConsumer
 {
+    public Task SubscribeAsync(
+        string topic,
+        SubscriptionMode mode,
+        string consumerName,
+        RetryPolicy retryPolicy,
+        Func<EventEnvelope, IMessageContext, CancellationToken, Task> handler,
+        CancellationToken cancellationToken) =>
+        SubscribeAsync(topic, mode, consumerName, retryPolicy, QueueLifetime.Durable, handler, cancellationToken);
+
     public async Task SubscribeAsync(
         string topic,
         SubscriptionMode mode,
         string consumerName,
         RetryPolicy retryPolicy,
+        QueueLifetime queueLifetime,
         Func<EventEnvelope, IMessageContext, CancellationToken, Task> handler,
         CancellationToken cancellationToken)
     {
@@ -39,15 +49,29 @@ public sealed class RabbitMqEventConsumer(RabbitMqConnection connection) : IEven
         await channel.ExchangeDeclareAsync(topic, ExchangeType.Fanout, durable: true, cancellationToken: cancellationToken);
 
         var queueName = mode == SubscriptionMode.Competing ? $"{topic}.{consumerName}" : $"{topic}.{Guid.NewGuid():N}";
-        var exclusive = mode == SubscriptionMode.Broadcast;
+
+        // `15-15`: a queue tied to this one connection's lifetime, not just Broadcast's own reason for
+        // being exclusive+auto-delete (a fresh, randomly-named queue every subscribe call has nothing
+        // else that could ever reattach to it) but also a Competing subscription whose caller has said,
+        // via QueueLifetime.ProcessScoped, that its consumer name already names something with no life
+        // beyond this process. Every other Competing subscription (the overwhelming majority - every
+        // durable topic in messaging.md's table) is unaffected: exclusive/autoDelete stay false exactly
+        // as before this item, because QueueLifetime.Durable is what the six-argument overload above
+        // forwards here.
+        var ephemeral = mode == SubscriptionMode.Broadcast || queueLifetime == QueueLifetime.ProcessScoped;
         await channel.QueueDeclareAsync(
-            queue: queueName, durable: !exclusive, exclusive: exclusive, autoDelete: exclusive,
+            queue: queueName, durable: !ephemeral, exclusive: ephemeral, autoDelete: ephemeral,
             cancellationToken: cancellationToken);
         await channel.QueueBindAsync(queueName, topic, routingKey: string.Empty, cancellationToken: cancellationToken);
 
+        // The retry queue exists only to serve this queue's own redelivery loop - it has no life
+        // independent of the queue above, so it shares that queue's lifetime rather than being
+        // unconditionally durable. For a Durable subscription this is exactly the pre-15-15 shape
+        // (always durable, never auto-deleted); for a ProcessScoped one, a retry queue that outlived
+        // its own main queue would be exactly the orphan this item exists to stop leaking.
         var retryQueueName = $"{queueName}.retry";
         await channel.QueueDeclareAsync(
-            queue: retryQueueName, durable: true, exclusive: false, autoDelete: false,
+            queue: retryQueueName, durable: !ephemeral, exclusive: ephemeral, autoDelete: ephemeral,
             arguments: new Dictionary<string, object?>
             {
                 ["x-message-ttl"] = (int)retryPolicy.InitialBackoff.TotalMilliseconds,
@@ -56,6 +80,23 @@ public sealed class RabbitMqEventConsumer(RabbitMqConnection connection) : IEven
             },
             cancellationToken: cancellationToken);
 
+        // The dead-letter queue deliberately does NOT follow queueLifetime, unlike the two queues
+        // above - it is not owned by this one subscription the way its own retry queue is.
+        // `Broadcast_TwoConsumers_BothReceiveEveryMessage` (pre-existing, unrelated to `15-15`) already
+        // proves a DLQ name can legitimately be shared across two independent subscriptions on the
+        // same topic; making it exclusive here broke that test with a real RESOURCE_LOCKED from the
+        // broker the moment a second subscription tried to declare the same name - caught only by
+        // running the full suite, not by this item's own new tests, which is exactly why the full
+        // suite (not just new tests) is the bar. A DLQ is a monitored, durable destination for poison
+        // messages regardless of which consumer instance produced them (messaging.md: "a DLQ with no
+        // alert and no runbook entry is a silent data-loss channel") - that job does not change when
+        // the consumer that fills it happens to be ProcessScoped.
+        //
+        // `NodeDeliveryConsumer` (this item's motivating ProcessScoped caller) still gets the orphan
+        // problem solved: it never actually dead-letters (MaxAttempts: 1, and its handler acks even on
+        // failure), so its own fix is naming its DLQ once, shared across every node, rather than
+        // per-pod (`NodeDeliveryConsumer`'s own remarks) - a durable queue that exists exactly once
+        // regardless of restarts, not the orphan this item measured.
         await channel.QueueDeclareAsync(
             queue: retryPolicy.DeadLetterName, durable: true, exclusive: false, autoDelete: false,
             cancellationToken: cancellationToken);
