@@ -238,6 +238,19 @@ public sealed class NodeDeliveryDispatchMetricsTests
             string consumerName,
             RetryPolicy retryPolicy,
             Func<EventEnvelope, IMessageContext, CancellationToken, Task> handler,
+            CancellationToken cancellationToken) =>
+            SubscribeAsync(topic, mode, consumerName, retryPolicy, QueueLifetime.Durable, handler, cancellationToken);
+
+        // `15-15`: NodeDeliveryConsumer now calls this overload directly (QueueLifetime.ProcessScoped),
+        // so this is the one that actually captures the handler under test; the six-argument overload
+        // above only exists to keep this fake satisfying the full interface.
+        public Task SubscribeAsync(
+            string topic,
+            SubscriptionMode mode,
+            string consumerName,
+            RetryPolicy retryPolicy,
+            QueueLifetime queueLifetime,
+            Func<EventEnvelope, IMessageContext, CancellationToken, Task> handler,
             CancellationToken cancellationToken)
         {
             _subscribed.TrySetResult(handler);

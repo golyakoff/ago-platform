@@ -4,6 +4,67 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.20.0] - 2026-09-04
+
+### Fixed
+
+- **Every `ago-chat-api` pod restart left a durable queue behind, for ever (`15-15`).** Measured on
+  the live broker: 72 `deliver-to-connections.<pod>` queues, 71 of them belonging to pods that no
+  longer existed - a running total of every pod the cluster had ever had, each still bound to the
+  fanout exchange and routed into on every publish. `NodeDeliveryConsumer` names its
+  `Competing`-mode queue after the pod (correct - that is what "deliver to the node holding this
+  connection" means), and `RabbitMqEventConsumer` had exactly one shape for `Competing`:
+  `durable: true, autoDelete: false`, correct for a genuinely durable subscription and never a
+  decision for a queue whose consumer name already names something with no life beyond one process.
+  `NodeDeliveryConsumer` now opts into the new `QueueLifetime.ProcessScoped` (below); its main queue
+  and retry queue are `exclusive: true, autoDelete: true` and gone the instant the declaring
+  connection closes, proven against a real broker
+  (`RabbitMqQueueLifetimeTests.ProcessScoped_...`). Its dead-letter queue is unaffected (see
+  **Changed**) and, separately, renamed from a per-node name to one shared across every node, so it
+  does not reintroduce the identical orphan one queue over - safe only because this consumer never
+  actually dead-letters (`MaxAttempts: 1`, and its handler acks even on failure).
+
+### Added
+
+- **`QueueLifetime`** (`Ago.Platform.Abstractions`): `Durable` (the default, and the only shape
+  `Competing` had before this) or `ProcessScoped` - a queue that exists only for as long as its
+  declaring connection is open. Orthogonal to `SubscriptionMode`: mode is about how a message is
+  routed, lifetime is about how long the queue that routing depends on sticks around. See the type's
+  own doc comment for when `ProcessScoped` is (and is not) correct - most `Competing` subscriptions
+  in this system are genuinely durable and must stay that way, or a rolling deploy silently drops
+  whatever was published while no replica happened to be attached.
+- **`IEventConsumer.SubscribeAsync` overload taking `QueueLifetime`.** The existing six-argument
+  overload is unchanged and keeps compiling for every current caller, forwarding to the new one with
+  `QueueLifetime.Durable` - see **Changed** for who this new overload actually affects.
+
+### Changed
+
+- **Source-breaking for a direct `IEventConsumer` implementation, not for a caller.** `IEventConsumer`
+  gains a second `SubscribeAsync` overload (above) as a full interface member, not a default parameter
+  - a `QueueLifetime`-shaped optional parameter cannot sit before the always-explicit
+  `CancellationToken` without either reordering every existing call site or making the token itself
+  optional, which this codebase never does. Concretely, this means:
+  - **Every existing call site - in this repository and in `ago-chat` - keeps compiling unedited.**
+    `ago-chat` consumes `IEventConsumer` only via DI (`grep`-confirmed: no type in `ago-chat` declares
+    `: IEventConsumer`), and DI callers only ever reach for the six-argument overload unless they
+    explicitly ask for the new one, so `ago-chat` needs nothing from this release but a package-version
+    bump once it is packed - no source change, in any of its twelve `SubscribeAsync` call sites.
+  - **Anyone who hand-writes an `IEventConsumer` implementation must add the new method.** The only
+    two such types exist in this repository - `RabbitMqEventConsumer` (the real adapter) and
+    `NodeDeliveryDispatchMetricsTests`' `HandlerCapturingEventConsumer` (a test fake) - and both are
+    updated here. No implementation exists in `ago-chat` (confirmed above) or anywhere else known to
+    this repository.
+- **A subscription's dead-letter queue is never subscription-owned and does not follow
+  `QueueLifetime`, even for `ProcessScoped`.** Stated explicitly for the first time here, though
+  behaviour for every existing `Durable` caller is unchanged: `retryPolicy.DeadLetterName` is always
+  declared `durable: true, exclusive: false, autoDelete: false`, because a dead-letter queue is a
+  monitored destination for poison messages regardless of which consumer instance produced them
+  (`messaging.md`: "a DLQ with no alert and no runbook entry is a silent data-loss channel") and can
+  legitimately be shared by name across independent subscriptions -
+  `RabbitMqPublishConsumeTests.Broadcast_TwoConsumers_BothReceiveEveryMessage` (pre-existing, unrelated
+  to `15-15`) already relies on exactly that and is what caught the first draft of this fix trying to
+  make the DLQ `ProcessScoped` too (a real `RESOURCE_LOCKED` from the broker, not a hypothetical).
+
 ## [0.19.0] - 2026-09-03
 
 ### Fixed
