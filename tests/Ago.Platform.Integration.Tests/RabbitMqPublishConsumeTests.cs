@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using Ago.Platform.Abstractions;
 using Ago.Platform.Messaging.RabbitMq;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Ago.Platform.Integration.Tests;
 
@@ -13,8 +14,8 @@ public sealed class RabbitMqPublishConsumeTests(RabbitMqFixture fixture)
     public async Task PublishThenConsume_Competing_DeliversTheEnvelopeIntact()
     {
         var topic = RabbitMqTestHelpers.NewTopic();
-        await using var connection = new RabbitMqConnection(fixture.CreateOptions());
-        var publisher = new RabbitMqEventPublisher(connection);
+        await using var connection = new RabbitMqConnection(fixture.CreateOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var publisher = new RabbitMqEventPublisher(connection, NullLogger<RabbitMqEventPublisher>.Instance);
         var consumer = new RabbitMqEventConsumer(connection);
 
         var received = new ConcurrentBag<EventEnvelope>();
@@ -41,8 +42,8 @@ public sealed class RabbitMqPublishConsumeTests(RabbitMqFixture fixture)
     public async Task Competing_TwoReplicasOfTheSameConsumer_EachMessageGoesToExactlyOne()
     {
         var topic = RabbitMqTestHelpers.NewTopic();
-        await using var connection = new RabbitMqConnection(fixture.CreateOptions());
-        var publisher = new RabbitMqEventPublisher(connection);
+        await using var connection = new RabbitMqConnection(fixture.CreateOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var publisher = new RabbitMqEventPublisher(connection, NullLogger<RabbitMqEventPublisher>.Instance);
         var consumer = new RabbitMqEventConsumer(connection);
 
         // Same consumerName on both - two replicas of one logical consumer, sharing the load. This is
@@ -89,8 +90,8 @@ public sealed class RabbitMqPublishConsumeTests(RabbitMqFixture fixture)
     public async Task Competing_TwoDifferentConsumerTypes_BothReceiveEveryMessageIndependently()
     {
         var topic = RabbitMqTestHelpers.NewTopic();
-        await using var connection = new RabbitMqConnection(fixture.CreateOptions());
-        var publisher = new RabbitMqEventPublisher(connection);
+        await using var connection = new RabbitMqConnection(fixture.CreateOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var publisher = new RabbitMqEventPublisher(connection, NullLogger<RabbitMqEventPublisher>.Instance);
         var consumer = new RabbitMqEventConsumer(connection);
 
         var receivedByA = new ConcurrentBag<Guid>();
@@ -125,8 +126,8 @@ public sealed class RabbitMqPublishConsumeTests(RabbitMqFixture fixture)
     public async Task Broadcast_TwoConsumers_BothReceiveEveryMessage()
     {
         var topic = RabbitMqTestHelpers.NewTopic();
-        await using var connection = new RabbitMqConnection(fixture.CreateOptions());
-        var publisher = new RabbitMqEventPublisher(connection);
+        await using var connection = new RabbitMqConnection(fixture.CreateOptions(), NullLogger<RabbitMqConnection>.Instance);
+        var publisher = new RabbitMqEventPublisher(connection, NullLogger<RabbitMqEventPublisher>.Instance);
         var consumer = new RabbitMqEventConsumer(connection);
 
         var receivedByA = new ConcurrentBag<Guid>();

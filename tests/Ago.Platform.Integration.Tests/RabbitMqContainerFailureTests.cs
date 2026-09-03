@@ -1,5 +1,6 @@
 ﻿using Ago.Platform.Abstractions;
 using Ago.Platform.Messaging.RabbitMq;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Ago.Platform.Integration.Tests;
@@ -25,8 +26,8 @@ public sealed class RabbitMqContainerFailureTests
             Password = "ago-test-local-dev",
         });
 
-        await using var connection = new RabbitMqConnection(options);
-        var publisher = new RabbitMqEventPublisher(connection);
+        await using var connection = new RabbitMqConnection(options, NullLogger<RabbitMqConnection>.Instance);
+        var publisher = new RabbitMqEventPublisher(connection, NullLogger<RabbitMqEventPublisher>.Instance);
 
         // Establishes the connection/channel while the broker is still up, matching a long-lived
         // publisher that only later finds the broker gone - the interesting failure mode.

@@ -25,8 +25,8 @@ public sealed class CacheInvalidationTests(NodeFanoutFixture fixture)
         var key = new CacheKey($"test:{Guid.NewGuid():N}");
         await cacheA.SetAsync(key, "cached", new CacheEntryOptions(TimeSpan.FromMinutes(5)), CancellationToken.None);
 
-        await using var consumerConnectionA = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
-        await using var consumerConnectionB = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
+        await using var consumerConnectionA = new RabbitMqConnection(fixture.CreateRabbitMqOptions(), NullLogger<RabbitMqConnection>.Instance);
+        await using var consumerConnectionB = new RabbitMqConnection(fixture.CreateRabbitMqOptions(), NullLogger<RabbitMqConnection>.Instance);
         var consumerA = new CacheInvalidationConsumer(new RabbitMqEventConsumer(consumerConnectionA), cacheA, NullLogger<CacheInvalidationConsumer>.Instance);
         var consumerB = new CacheInvalidationConsumer(new RabbitMqEventConsumer(consumerConnectionB), cacheB, NullLogger<CacheInvalidationConsumer>.Instance);
         await consumerA.StartAsync(CancellationToken.None);
@@ -37,8 +37,8 @@ public sealed class CacheInvalidationTests(NodeFanoutFixture fixture)
 
         try
         {
-            await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions());
-            var publisher = new CacheInvalidationPublisher(new RabbitMqEventPublisher(publisherConnection), new FakeClock(DateTimeOffset.UtcNow));
+            await using var publisherConnection = new RabbitMqConnection(fixture.CreateRabbitMqOptions(), NullLogger<RabbitMqConnection>.Instance);
+            var publisher = new CacheInvalidationPublisher(new RabbitMqEventPublisher(publisherConnection, NullLogger<RabbitMqEventPublisher>.Instance), new FakeClock(DateTimeOffset.UtcNow));
 
             await publisher.PublishAsync(key, Guid.NewGuid(), CancellationToken.None);
 

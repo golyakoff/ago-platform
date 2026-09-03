@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Ago.Platform.Abstractions;
+using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 
 namespace Ago.Platform.Messaging.RabbitMq;
@@ -13,7 +14,7 @@ namespace Ago.Platform.Messaging.RabbitMq;
 /// this boundary) mean this method does not return until the broker has actually accepted the
 /// message.
 /// </summary>
-public sealed class RabbitMqEventPublisher(RabbitMqConnection connection) : IEventPublisher, IAsyncDisposable
+public sealed class RabbitMqEventPublisher(RabbitMqConnection connection, ILogger<RabbitMqEventPublisher> logger) : IEventPublisher, IAsyncDisposable
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
     private IChannel? _channel;
@@ -109,11 +110,24 @@ public sealed class RabbitMqEventPublisher(RabbitMqConnection connection) : IEve
 
     public async ValueTask DisposeAsync()
     {
-        if (_channel is not null)
+        try
         {
-            await _channel.DisposeAsync();
+            if (_channel is not null)
+            {
+                await _channel.DisposeAsync();
+            }
         }
-
-        _lock.Dispose();
+        catch (Exception ex)
+        {
+            // Best-effort, same reasoning as RabbitMqConnection.DisposeAsync (17-09) - IChannel's own
+            // DisposeAsync takes the identical forced-close-over-negotiated-close path (calls its own
+            // AbortAsync when open, bounded to a 5s internal timeout) and can still let a
+            // TaskCanceledException escape when the broker never answers it.
+            logger.LogWarning(ex, "RabbitMQ channel did not close cleanly during dispose.");
+        }
+        finally
+        {
+            _lock.Dispose();
+        }
     }
 }
