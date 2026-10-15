@@ -6,6 +6,13 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 
 ## [0.21.0] - 2026-10-15
 
+### Added
+
+- **`Otel:Sampling:Ratio` (`26-332`)**: fraction of new root traces recorded, 0..1, default `1`
+  (everything - unchanged behaviour until set). The sampler is `ParentBased(TraceIdRatioBased)`, so a
+  request arriving with a `traceparent` keeps its parent's decision. Head sampling only: it cannot
+  prefer errors or slow requests. Out-of-range values fail host startup.
+
 ### Changed
 
 - **`AddPlatformObservability` no longer starts a trace for a health probe or a metrics scrape

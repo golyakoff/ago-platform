@@ -26,6 +26,8 @@ public sealed class PlatformObservabilityOptions : IValidatableObject
 
     public OtelExporterOptions Exporter { get; set; } = new();
 
+    public OtelSamplingOptions Sampling { get; set; } = new();
+
     // Same reasoning as ResiliencePipelineOptions' own IValidatableObject: [Required] on this
     // class's own properties would only ever check that Exporter is non-null, never recurse into
     // its own [Required] Endpoint - Validator.TryValidateObject does not walk nested objects on its
@@ -42,6 +44,15 @@ public sealed class PlatformObservabilityOptions : IValidatableObject
                 $"{nameof(Exporter)}: {result.ErrorMessage}",
                 result.MemberNames.Select(member => $"{nameof(Exporter)}.{member}"));
         }
+
+        var samplingResults = new List<ValidationResult>();
+        Validator.TryValidateObject(Sampling, new ValidationContext(Sampling), samplingResults, validateAllProperties: true);
+        foreach (var result in samplingResults)
+        {
+            yield return new ValidationResult(
+                $"{nameof(Sampling)}: {result.ErrorMessage}",
+                result.MemberNames.Select(member => $"{nameof(Sampling)}.{member}"));
+        }
     }
 }
 
@@ -50,4 +61,19 @@ public sealed class OtelExporterOptions
 {
     [Required]
     public Uri? Endpoint { get; set; }
+}
+
+/// <summary>
+/// `26-332`: bound from <c>Otel:Sampling:*</c>. Head sampling only - the decision is made when the
+/// root span starts, so it cannot prefer "errors and slow requests"; that needs a tail sampler in a
+/// collector (`adr/0025`'s rejected alternative, reopened by the collector ADR).
+/// </summary>
+public sealed class OtelSamplingOptions
+{
+    /// <summary>Fraction of *new* root traces to record, 0..1. Defaults to 1 (record everything) so
+    /// adding this key changes nothing until somebody sets it. A request that arrives with a
+    /// <c>traceparent</c> keeps its parent's decision (<c>ParentBased</c>) - sampling half of a
+    /// distributed trace is worse than sampling none of it.</summary>
+    [Range(0.0, 1.0)]
+    public double Ratio { get; set; } = 1.0;
 }

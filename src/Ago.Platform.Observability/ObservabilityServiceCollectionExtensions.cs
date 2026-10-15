@@ -87,6 +87,10 @@ public static class ObservabilityServiceCollectionExtensions
                 .AddService(serviceName, serviceVersion: options.ServiceVersion)
                 .AddAttributes([new KeyValuePair<string, object>("deployment.environment", options.DeploymentEnvironment)]))
             .WithTracing(tracing => tracing
+                // `26-332`: ParentBased(TraceIdRatioBased) - a root request is kept with probability
+                // Otel:Sampling:Ratio, a request carrying a traceparent follows its parent. At the
+                // default 1.0 this is the SDK's own default (ParentBased(AlwaysOn)) made explicit.
+                .SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(options.Sampling.Ratio)))
                 // `26-331`: no span for a liveness/readiness probe or a Prometheus scrape. Probes and
                 // scrapes are the bulk of a quiet host's requests (`adr/0057` measured Jaeger's
                 // 10000-trace ring turning over in about an hour on probe traffic alone), and a trace
