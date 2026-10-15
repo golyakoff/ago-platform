@@ -124,6 +124,45 @@ public class PlatformObservabilityTests
         Assert.Equal(new Uri("http://localhost:4317"), options.Exporter.Endpoint);
     }
 
+    [Theory]
+    [InlineData("-0.1")]
+    [InlineData("1.5")]
+    public void AddPlatformObservability_SamplingRatioOutsideZeroToOne_FailsFast(string ratio)
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Otel:Exporter:Endpoint"] = "http://localhost:4317",
+            ["Otel:Sampling:Ratio"] = ratio,
+        });
+
+        var services = new ServiceCollection();
+        Assert.Throws<ValidationException>(() => services.AddPlatformObservability(configuration, "Ago.Product.Api"));
+    }
+
+    [Theory]
+    [InlineData(null, true)]   // not configured: record everything, as before
+    [InlineData("1", true)]
+    [InlineData("0", false)]
+    public void AddPlatformObservability_SamplingRatio_DecidesWhetherARootTraceIsRecorded(string? ratio, bool recorded)
+    {
+        var values = new Dictionary<string, string?> { ["Otel:Exporter:Endpoint"] = "http://localhost:4317" };
+        if (ratio is not null)
+        {
+            values["Otel:Sampling:Ratio"] = ratio;
+        }
+
+        var services = new ServiceCollection();
+        services.AddPlatformObservability(BuildConfiguration(values), "Ago.Product.Api");
+        using var provider = services.BuildServiceProvider();
+        _ = provider.GetRequiredService<TracerProvider>();
+
+        // "Ago.*" is the wildcard the platform subscribes to, so this source reaches the real sampler.
+        using var source = new System.Diagnostics.ActivitySource("Ago.Product.SamplingTest");
+        using var activity = source.StartActivity("root");
+
+        Assert.Equal(recorded, activity?.IsAllDataRequested == true);
+    }
+
     private static IConfiguration BuildConfiguration(Dictionary<string, string?> values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 }
