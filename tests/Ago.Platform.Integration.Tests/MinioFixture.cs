@@ -11,6 +11,10 @@ public sealed class MinioFixture : IAsyncLifetime
     private const string Password = "ago-test-local-dev";
     public const string Bucket = "attachments";
 
+    // Upstream minio/minio is no longer published on Docker Hub or quay.io; pgsty/minio is the community
+    // fork of the same server. Pinned by digest so a re-tag cannot change what CI runs.
+    public const string Image = "pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372";
+
     private MinioContainer _container = null!;
 
     public IAmazonS3 Client { get; private set; } = null!;
@@ -19,7 +23,7 @@ public sealed class MinioFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _container = new MinioBuilder("minio/minio:RELEASE.2025-09-07T16-13-09Z").WithUsername(Username).WithPassword(Password).Build();
+        _container = new MinioBuilder(Image).WithUsername(Username).WithPassword(Password).Build();
         await _container.StartAsync();
 
         Options = new S3StorageOptions

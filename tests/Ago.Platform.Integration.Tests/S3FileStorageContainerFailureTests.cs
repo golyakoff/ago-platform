@@ -20,7 +20,7 @@ public sealed class S3FileStorageContainerFailureTests
     {
         const string username = "ago-test";
         const string password = "ago-test-local-dev";
-        var container = new MinioBuilder("minio/minio:RELEASE.2025-09-07T16-13-09Z").WithUsername(username).WithPassword(password).Build();
+        var container = new MinioBuilder(MinioFixture.Image).WithUsername(username).WithPassword(password).Build();
         await container.StartAsync();
 
         var options = new S3StorageOptions
