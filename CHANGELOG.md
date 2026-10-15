@@ -4,6 +4,18 @@ All notable changes to `Ago.Platform.*` are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/) (`docs/architecture/repositories.md`).
 
+## [0.21.0] - 2026-10-15
+
+### Changed
+
+- **`AddPlatformObservability` no longer starts a trace for a health probe or a metrics scrape
+  (`26-331`).** Inbound requests to `/healthz*` and `/metrics` are dropped by the ASP.NET Core tracing
+  instrumentation's filter (`Ago.Platform.Observability.TracePathFilter`, matched by path segment, so
+  `/healthzone` is still traced). On a quiet host these were most of the traffic - `adr/0057` measured
+  Jaeger's 10000-trace ring turning over in about an hour on probes alone. Request **metrics are
+  unchanged**: probes and scrapes are still counted there. No configuration key; a host that wanted
+  probe traces back would have to say so, and none has asked.
+
 ## [0.20.0] - 2026-09-04
 
 ### Fixed

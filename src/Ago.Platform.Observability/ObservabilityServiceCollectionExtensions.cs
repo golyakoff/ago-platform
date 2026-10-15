@@ -87,7 +87,12 @@ public static class ObservabilityServiceCollectionExtensions
                 .AddService(serviceName, serviceVersion: options.ServiceVersion)
                 .AddAttributes([new KeyValuePair<string, object>("deployment.environment", options.DeploymentEnvironment)]))
             .WithTracing(tracing => tracing
-                .AddAspNetCoreInstrumentation()
+                // `26-331`: no span for a liveness/readiness probe or a Prometheus scrape. Probes and
+                // scrapes are the bulk of a quiet host's requests (`adr/0057` measured Jaeger's
+                // 10000-trace ring turning over in about an hour on probe traffic alone), and a trace
+                // of one answers no question anyone asks. Tracing only: the request *metrics* still
+                // count them, which is where "is the probe failing" belongs.
+                .AddAspNetCoreInstrumentation(aspNet => aspNet.Filter = TracePathFilter.ShouldTrace)
                 .AddHttpClientInstrumentation()
                 .AddSource("Npgsql")
                 // Every Ago.* manual ActivitySource (a product's own hub/outbox/consumer spans,
