@@ -92,7 +92,7 @@
          correctness against an in-memory exporter, not a live Jaeger - `7-03`'s job). -->
     <PackageVersion Include="OpenTelemetry" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
     <!-- `7-02` fix (found live while verifying `7-03`): metrics were wired as an OTLP push exporter
          sharing `Otel:Exporter:Endpoint` with tracing - which points at Jaeger, and Jaeger does not
